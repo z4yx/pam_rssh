@@ -1,0 +1,13 @@
+[package]
+name = "pam_rssh"
+version = "0.1.0"
+authors = ["Yuxiang Zhang"]
+edition = "2018"
+
+[lib]
+name = "pam_rssh"
+crate-type = ["cdylib"]
+
+[dependencies]
+pam = { path = "./dep/pam-rs/pam" }
+ssh-agent = "0.2.3"
