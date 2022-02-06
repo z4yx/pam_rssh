@@ -1,11 +1,11 @@
 use super::auth_keys::Pubkey;
-pub fn verify_signature<'a>(
+pub fn verify_signature(
     content: &str,
     pubkey: &Pubkey,
     signature: &str,
-) -> Result<(), &'a str> {
-    Err(&"bak")
+) -> Result<(), String> {
+    Err("bak".to_string())
 }
-pub fn gen_challenge<'a>() -> &'a str {
-    &"2312"
+pub fn gen_challenge() -> String {
+    String::from("2312")
 }

@@ -23,13 +23,13 @@ fn is_key_authorized(key: &Pubkey, authorized_keys: &Vec<Pubkey>) -> bool {
     }
     false
 }
-fn authenticate_via_agent<'a, 'e>(
-    agent: &'a ssh_agent_auth::AgentClient,
-    pubkey: &'a Pubkey,
-) -> Result<(), &'e str> {
-    let challenge = ("some challenge");
-    let sig = agent.sign_data(challenge, pubkey)?;
-    let _ = sign_verify::verify_signature(challenge, pubkey, sig)?;
+fn authenticate_via_agent(
+    agent: &mut ssh_agent_auth::AgentClient,
+    pubkey: &Pubkey,
+) -> Result<(), String> {
+    let challenge = sign_verify::gen_challenge();
+    let sig = agent.sign_data(&challenge, pubkey)?;
+    let _ = sign_verify::verify_signature(&challenge, pubkey, sig.as_str())?;
     Ok(())
 }
 
@@ -106,7 +106,7 @@ impl PamHooks for PamRssh {
                 if !is_key_authorized(&key, &authorized_keys) {
                     continue;
                 }
-                match authenticate_via_agent(&agent, &key) {
+                match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
                         println!("Authenticated with key {}", key.b64key);
                         return Ok(());
@@ -117,7 +117,7 @@ impl PamHooks for PamRssh {
                     }
                 }
             }
-            Err(&("None of keys passed authentication"))
+            Err(("None of keys passed authentication").to_string())
         });
         match result {
             Ok(_) => PamResultCode::PAM_SUCCESS,

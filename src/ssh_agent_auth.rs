@@ -5,16 +5,16 @@ pub struct AgentClient<'a>  {
     connected: bool
 }
 
-impl<'a,'b,'e> AgentClient<'a> where 'a:'b, 'a:'e{
+impl<'a> AgentClient<'a>{
     pub fn new(addr: &str) -> AgentClient {
         AgentClient{addr, connected: false}
     }
 
-    pub fn list_identities(self: &mut AgentClient<'a>) -> Result<Vec<Pubkey>,  &'e str> {
-        Err(&"")
+    pub fn list_identities(&mut self) -> Result<Vec<Pubkey>, String> {
+        Err("".to_string())
     }
 
-    pub fn sign_data(self: &mut AgentClient<'a>, data: &'b str, pubkey: &'b Pubkey) -> Result<&'e str, &'e str> {
-        Err(&"")
+    pub fn sign_data<'b>(&mut self, data: &'b str, pubkey: &'b Pubkey) -> Result<String, String> {
+        Err("".to_string())
     }
 }

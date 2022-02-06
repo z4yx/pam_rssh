@@ -1,14 +1,14 @@
 use std::fs;
 use std::path::PathBuf;
 
-pub struct Pubkey<'a> {
-    pub b64key: &'a str,
-    pub algo: &'a str,
+pub struct Pubkey {
+    pub b64key: String,
+    pub algo: String,
 }
 
-pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, &str> {
+pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, String> {
     let content = match fs::read_to_string(filename) {
-        Err(e) => return Err(&("Failed to read ".to_string() + filename)),
+        Err(e) => return Err("Failed to read ".to_string() + filename),
         Ok(v) => v,
     };
     let mut lines = content.lines();
@@ -18,8 +18,8 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, &str> {
         if let Some(algo) = fields.next() {
             if let Some(b64key) = fields.next() {
                 let key = Pubkey {
-                    algo,
-                    b64key
+                    algo: algo.to_string(),
+                    b64key: b64key.to_string()
                 };
                 res.push(key);
             }
@@ -28,7 +28,7 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, &str> {
     Ok(res)
 }
 
-pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<Pubkey>, &str> {
+pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<Pubkey>, String> {
     let path: PathBuf = ["/home", username, ".ssh", "authorized_keys"]
         .iter()
         .collect();
