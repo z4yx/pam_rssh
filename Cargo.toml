@@ -11,3 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 pam = { path = "./dep/pam-rs/pam" }
 ssh-agent = "0.2.3"
+multisock = "1.0.0"
+#tokio = "0.1.15"
+#bytes = "0.4.11"
+byteorder = "1.2.7"

@@ -5,12 +5,12 @@ use ssh_agent::proto;
 use ssh_agent::proto::{from_bytes, to_bytes, Message};
 // use tokio::codec::{Framed, Encoder, Decoder};
 use std::io::{Read, Write};
-use std::mem::size_of;
+// use std::mem::size_of;
 use std::net::Shutdown;
 
 use super::auth_keys::Pubkey;
 
-struct MessageCodec;
+// struct MessageCodec;
 
 pub struct AgentClient<'a> {
     addr: &'a str,
@@ -88,6 +88,13 @@ impl std::string::ToString for CommError {
 
 static NET_RETRY_CNT: u32 = 3;
 
+enum SSH_AGENT_SIGN_FLAG {
+    NONE = 0,
+    RESERVED = 1,
+    SSH_AGENT_RSA_SHA2_256 = 2,
+    SSH_AGENT_RSA_SHA2_512 = 4,
+}
+
 impl<'a> AgentClient<'a> {
     pub fn new(addr: &str) -> AgentClient {
         AgentClient { addr, stream: None }
@@ -110,7 +117,7 @@ impl<'a> AgentClient<'a> {
     }
 
     fn connect(&mut self) -> Result<(), CommError> {
-        let mut sockaddr: SocketAddr = self.addr.parse()?;
+        let sockaddr: SocketAddr = self.addr.parse()?;
         // match self.addr.parse() {
         //     Ok(_addr) => sockaddr = _addr,
         //     Err(e) => return Err(e.to_string()),
@@ -152,10 +159,32 @@ impl<'a> AgentClient<'a> {
     }
 
     pub fn list_identities(&mut self) -> Result<Vec<Pubkey>, String> {
-        Err("".to_string())
+        let msg = self.call_agent(&Message::RequestIdentities, NET_RETRY_CNT)?;
+        if let Message::IdentitiesAnswer(keys) = msg {
+            for item in keys {
+                println!("key: {:?} ({})", item.pubkey_blob, item.comment);
+            }
+            Ok(vec![])
+        } else {
+            Err("Invalid type of response".to_string())
+        }
     }
 
     pub fn sign_data<'b>(&mut self, data: &'b str, pubkey: &'b Pubkey) -> Result<String, String> {
-        Err("".to_string())
+        let args = proto::SignRequest {
+            pubkey_blob: Vec::from(pubkey.b64key.as_bytes()),
+            data: Vec::from(data.as_bytes()),
+            flags: (SSH_AGENT_SIGN_FLAG::NONE) as u32,
+        };
+        let msg = self.call_agent(&Message::SignRequest(args), NET_RETRY_CNT)?;
+        if let Message::SignResponse(val) = msg {
+            println!("signature: {:?}", val);
+            match String::from_utf8(val) {
+                Ok(s) => Ok(s),
+                Err(e) => Err(e.to_string())
+            }
+        } else {
+            Err("Invalid type of response".to_string())
+        }
     }
 }
