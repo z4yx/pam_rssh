@@ -1,190 +1,108 @@
-// use bytes::{BytesMut, BufMut};
 use byteorder::{BigEndian, ReadBytesExt};
 use multisock::{SocketAddr, Stream};
 use ssh_agent::proto;
 use ssh_agent::proto::{from_bytes, to_bytes, Message};
-// use tokio::codec::{Framed, Encoder, Decoder};
+use ssh_agent::proto::public_key::PublicKey;
+use ssh_agent::proto::signature;
+
 use std::io::{Read, Write};
 // use std::mem::size_of;
 use std::net::Shutdown;
 
-use super::auth_keys::Pubkey;
+use super::error::RsshErr;
 
-// struct MessageCodec;
+type ErrType = Box<dyn std::error::Error>;
 
 pub struct AgentClient<'a> {
     addr: &'a str,
     stream: Option<Stream>,
 }
 
-#[derive(Debug)]
-pub enum CommError {
-    NoDef,
-    Proto(proto::error::ProtoError),
-    IO(std::io::Error),
-    Addr(std::net::AddrParseError),
-}
-
-impl From<proto::error::ProtoError> for CommError {
-    fn from(e: proto::error::ProtoError) -> CommError {
-        CommError::Proto(e)
-    }
-}
-
-impl From<std::io::Error> for CommError {
-    fn from(e: std::io::Error) -> CommError {
-        CommError::IO(e)
-    }
-}
-
-impl From<std::net::AddrParseError> for CommError {
-    fn from(e: std::net::AddrParseError) -> CommError {
-        CommError::Addr(e)
-    }
-}
-
-impl std::string::ToString for CommError {
-    fn to_string(&self) -> String {
-        match self {
-            CommError::Proto(e) => e.to_string(),
-            CommError::IO(e) => e.to_string(),
-            CommError::Addr(e) => e.to_string(),
-            default => String::from("Unknown Error"),
-        }
-    }
-}
-
-// impl Decoder for MessageCodec {
-//     type Item = Message;
-//     type Error = CommError;
-//     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-//         let mut bytes = &src[..];
-//         if bytes.len() < size_of::<u32>() {
-//             return Ok(None);
-//         }
-//         let length = bytes.read_u32::<BigEndian>()? as usize;
-//         if bytes.len() < length {
-//             return Ok(None);
-//         }
-//         let message: Message = from_bytes(bytes)?;
-//         src.advance(size_of::<u32>() + length);
-//         Ok(Some(message))
-//     }
-// }
-
-// impl Encoder for MessageCodec {
-//     type Item = Message;
-//     type Error = CommError;
-//     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-//         let bytes = to_bytes(&to_bytes(&item)?)?;
-//         dst.put(bytes);
-//         Ok(())
-//     }
-// }
-
-// impl From<std::net::AddrParseError> for String {
-
-// }
-
 static NET_RETRY_CNT: u32 = 3;
-
-enum SSH_AGENT_SIGN_FLAG {
-    NONE = 0,
-    RESERVED = 1,
-    SSH_AGENT_RSA_SHA2_256 = 2,
-    SSH_AGENT_RSA_SHA2_512 = 4,
-}
 
 impl<'a> AgentClient<'a> {
     pub fn new(addr: &str) -> AgentClient {
         AgentClient { addr, stream: None }
     }
 
-    fn read_message(stream: &mut Stream) -> Result<Message, CommError> {
+    fn read_message(stream: &mut Stream) -> Result<Message, ErrType> {
         // let mut preamble = [0; 4];
         // stream.read_exact(&preamble)?;
         let length = stream.read_u32::<BigEndian>()? as usize;
-        let mut buffer: Vec<u8> = Vec::with_capacity(length);
+        println!("read len={}", length);
+        let mut buffer: Vec<u8> = vec![0; length as usize];
         stream.read_exact(buffer.as_mut_slice())?;
+        println!("read {} bytes: {:?}", buffer.len(), buffer);
         let msg: Message = from_bytes(buffer.as_slice())?;
         Ok(msg)
     }
 
-    fn write_message(stream: &mut Stream, msg: &Message) -> Result<(), CommError> {
+    fn write_message(stream: &mut Stream, msg: &Message) -> Result<(), ErrType> {
         let mut bytes = to_bytes(&to_bytes(msg)?)?;
         stream.write_all(&mut bytes)?;
+        println!("written {} bytes: {:?}", bytes.len(), bytes);
         Ok(())
     }
 
-    fn connect(&mut self) -> Result<(), CommError> {
+    fn connect(&mut self) -> Result<(), ErrType> {
         let sockaddr: SocketAddr = self.addr.parse()?;
-        // match self.addr.parse() {
-        //     Ok(_addr) => sockaddr = _addr,
-        //     Err(e) => return Err(e.to_string()),
-        // }
         if let Some(ref mut s) = self.stream {
             let _ = s.shutdown(Shutdown::Both);
             self.stream = None;
         }
         self.stream = Some(Stream::connect(&sockaddr)?);
-        // match Stream::connect(&sockaddr) {
-        //     Ok(s) => self.stream = Some(s),
-        //     Err(e) => return Err(e.to_string()),
-        // }
+        println!("connected to {:?}", sockaddr);
         Ok(())
     }
 
-    fn call_agent_once(&mut self, cmd: &Message) -> Result<Message, CommError> {
+    fn call_agent_once(&mut self, cmd: &Message) -> Result<Message, ErrType> {
         if self.stream.is_none() {
             self.connect()?;
         }
         let sock = self.stream.as_mut().unwrap();
         Self::write_message(sock, cmd)?;
         Self::read_message(sock)
-        // match Self::read_message(sock) {
-        //     Ok(msg) => return Ok(msg),
-        //     Err(e) => ret = Err(e.to_string())
-        // }
     }
 
-    fn call_agent(&mut self, cmd: &Message, retry: u32) -> Result<Message, String> {
-        let mut ret: Result<Message, CommError> = Err(CommError::NoDef);
+    fn call_agent(&mut self, cmd: &Message, retry: u32) -> Result<Message, ErrType> {
+        let mut ret: Result<Message, ErrType> = Err(RsshErr::RETRY_LT_1_ERR.into_ptr());
         for _i in 0..retry {
             ret = self.call_agent_once(cmd);
             if let Ok(val) = ret {
                 return Ok(val);
             }
         }
-        Err(ret.unwrap_err().to_string())
+        ret
     }
 
-    pub fn list_identities(&mut self) -> Result<Vec<Pubkey>, String> {
+    pub fn list_identities(&mut self) -> Result<Vec<PublicKey>, ErrType> {
         let msg = self.call_agent(&Message::RequestIdentities, NET_RETRY_CNT)?;
         if let Message::IdentitiesAnswer(keys) = msg {
+            let mut result = vec![];
             for item in keys {
                 println!("key: {:?} ({})", item.pubkey_blob, item.comment);
+                if let Ok(pubkey) = from_bytes(&item.pubkey_blob) {
+                    result.push(pubkey);
+                }
             }
-            Ok(vec![])
+            Ok(result)
         } else {
-            Err("Invalid type of response".to_string())
+            Err(RsshErr::INVALID_RSP_ERR.into_ptr())
         }
     }
 
-    pub fn sign_data<'b>(&mut self, data: &'b str, pubkey: &'b Pubkey) -> Result<String, String> {
+    pub fn sign_data<'b>(&mut self, data: &'b [u8], pubkey: &'b PublicKey) -> Result<Vec<u8>, ErrType> {
         let args = proto::SignRequest {
-            pubkey_blob: Vec::from(pubkey.b64key.as_bytes()),
-            data: Vec::from(data.as_bytes()),
-            flags: (SSH_AGENT_SIGN_FLAG::NONE) as u32,
+            pubkey_blob: to_bytes(pubkey)?,
+            data: data.to_vec(),
+            flags: signature::RSA_SHA2_256, // TODO
         };
         let msg = self.call_agent(&Message::SignRequest(args), NET_RETRY_CNT)?;
         if let Message::SignResponse(val) = msg {
             println!("signature: {:?}", val);
-            match String::from_utf8(val) {
-                Ok(s) => Ok(s),
-                Err(e) => Err(e.to_string())
-            }
+            Ok(val)
         } else {
-            Err("Invalid type of response".to_string())
+            Err(RsshErr::INVALID_RSP_ERR.into_ptr())
         }
     }
 }

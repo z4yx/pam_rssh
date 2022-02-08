@@ -1,26 +1,25 @@
+use ssh_agent::proto::public_key::PublicKey;
+use ssh_agent::proto::{from_bytes, to_bytes};
+
 use std::fs;
 use std::path::PathBuf;
 
-pub struct Pubkey {
-    pub b64key: String,
-    pub algo: String,
-}
+use super::error::RsshErr;
 
-pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, String> {
-    let content = match fs::read_to_string(filename) {
-        Err(e) => return Err("Failed to read ".to_string() + filename),
-        Ok(v) => v,
-    };
+type ErrType = Box<dyn std::error::Error>;
+
+pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> {
+    let content = fs::read_to_string(filename)
+        .map_err(|_| RsshErr::FILE_READ_ERR(filename.to_string()))?;
     let mut lines = content.lines();
-    let mut res: Vec<Pubkey> = vec![];
+    let mut res: Vec<PublicKey> = vec![];
     while let Some(line) = lines.next() {
         let mut fields = line.split_whitespace();
         if let Some(algo) = fields.next() {
             if let Some(b64key) = fields.next() {
-                let key = Pubkey {
-                    algo: algo.to_string(),
-                    b64key: b64key.to_string()
-                };
+                let key = base64::decode(b64key)
+                    .map_err(|_| RsshErr::PARSE_PUBKEY_ERR)
+                    .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::PARSE_PUBKEY_ERR))?;
                 res.push(key);
             }
         }
@@ -28,7 +27,7 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<Pubkey>, String> {
     Ok(res)
 }
 
-pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<Pubkey>, String> {
+pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
     let path: PathBuf = ["/home", username, ".ssh", "authorized_keys"]
         .iter()
         .collect();

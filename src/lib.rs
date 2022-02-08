@@ -2,22 +2,27 @@
 extern crate pam;
 
 mod auth_keys;
+mod error;
 mod sign_verify;
 mod ssh_agent_auth;
 
-use auth_keys::Pubkey;
 use pam::constants::{PamFlag, PamResultCode, PAM_PROMPT_ECHO_ON};
 use pam::conv::PamConv;
 use pam::module::{PamHandle, PamHooks};
+use ssh_agent::proto::public_key::PublicKey;
 use std::ffi::CStr;
 use std::str::FromStr;
+
+use self::error::RsshErr;
+
+type ErrType = Box<dyn std::error::Error>;
 
 struct PamRssh;
 pam_hooks!(PamRssh);
 
-fn is_key_authorized(key: &Pubkey, authorized_keys: &Vec<Pubkey>) -> bool {
+fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool {
     for item in authorized_keys {
-        if item.b64key == key.b64key {
+        if item == key {
             return true;
         }
     }
@@ -25,11 +30,11 @@ fn is_key_authorized(key: &Pubkey, authorized_keys: &Vec<Pubkey>) -> bool {
 }
 fn authenticate_via_agent(
     agent: &mut ssh_agent_auth::AgentClient,
-    pubkey: &Pubkey,
-) -> Result<(), String> {
-    let challenge = sign_verify::gen_challenge();
+    pubkey: &PublicKey,
+) -> Result<(), ErrType> {
+    let challenge = sign_verify::gen_challenge()?;
     let sig = agent.sign_data(&challenge, pubkey)?;
-    let _ = sign_verify::verify_signature(&challenge, pubkey, sig.as_str())?;
+    let _ = sign_verify::verify_signature(&challenge, pubkey, &sig)?;
     Ok(())
 }
 
@@ -71,7 +76,7 @@ impl PamHooks for PamRssh {
         }
 
         if (ssh_agent_addr.is_empty()) {
-            println!("SSH agent socket address not configured");
+            println!("Error: SSH agent socket address not configured");
             return PamResultCode::PAM_SYSTEM_ERR;
         }
 
@@ -79,7 +84,7 @@ impl PamHooks for PamRssh {
             let user = match pamh.get_user(None) {
                 Ok(u) => u,
                 Err(e) => {
-                    println!("Failed to get user name");
+                    println!("Error: Failed to get user name");
                     return e;
                 }
             };
@@ -108,7 +113,7 @@ impl PamHooks for PamRssh {
                 }
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
-                        println!("Authenticated with key {}", key.b64key);
+                        println!("Authenticated");
                         return Ok(());
                     }
                     Err(e) => {
@@ -117,7 +122,7 @@ impl PamHooks for PamRssh {
                     }
                 }
             }
-            Err(("None of keys passed authentication").to_string())
+            Err(RsshErr::NO_KEY_PASSED_ERR.into_ptr())
         });
         match result {
             Ok(_) => PamResultCode::PAM_SUCCESS,
@@ -137,4 +142,26 @@ impl PamHooks for PamRssh {
         println!("account management");
         PamResultCode::PAM_IGNORE
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ssh_agent_auth::AgentClient;
+    #[test]
+    fn sshagent_list_identities() {
+        let mut agent = AgentClient::new(&"unix:/run/user/1000/piv-ssh-jc.socket");
+        let result = agent.list_identities();
+        println!("result={:?}", result);
+        assert!(result.is_ok());
+        let keys = result.unwrap();
+        assert!(keys.len() > 0);
+        for item in keys {
+            println!("key: {:?}", item);
+        }
+    }
+
+    // #[test]
+    // fn another() {
+    //     panic!("Make this test fail");
+    // }
 }
