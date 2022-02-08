@@ -9,6 +9,7 @@ pub enum RsshErr {
     RETRY_LT_1_ERR,
     INVALID_RSP_ERR,
     NO_KEY_PASSED_ERR,
+    LIBSODIUM_INIT_ERR,
 }
 
 impl RsshErr {
@@ -29,6 +30,7 @@ impl Display for RsshErr {
             RsshErr::RETRY_LT_1_ERR => "Number of retry is less than one".to_string(),
             RsshErr::INVALID_RSP_ERR => "Invalid type of response".to_string(),
             RsshErr::NO_KEY_PASSED_ERR => "None of keys passed authentication".to_string(),
+            RsshErr::LIBSODIUM_INIT_ERR => "Failed to initialize libsodium".to_string(),
         };
         f.write_str(&msg);
         Ok(())

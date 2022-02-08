@@ -92,10 +92,15 @@ impl<'a> AgentClient<'a> {
     }
 
     pub fn sign_data<'b>(&mut self, data: &'b [u8], pubkey: &'b PublicKey) -> Result<Vec<u8>, ErrType> {
+        let flags = if let PublicKey::Rsa(_) = pubkey {
+            signature::RSA_SHA2_256
+        } else {
+            0
+        };
         let args = proto::SignRequest {
             pubkey_blob: to_bytes(pubkey)?,
             data: data.to_vec(),
-            flags: signature::RSA_SHA2_256, // TODO
+            flags,
         };
         let msg = self.call_agent(&Message::SignRequest(args), NET_RETRY_CNT)?;
         if let Message::SignResponse(val) = msg {

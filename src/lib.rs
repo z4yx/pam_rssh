@@ -105,6 +105,11 @@ impl PamHooks for PamRssh {
             }
         };
 
+        if !sign_verify::initialize_library() {
+            println!("Error: {}", RsshErr::LIBSODIUM_INIT_ERR);
+            return PamResultCode::PAM_SYSTEM_ERR;
+        }
+
         let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr);
         let result = agent.list_identities().and_then(|client_keys| {
             for key in client_keys {
@@ -147,6 +152,8 @@ impl PamHooks for PamRssh {
 #[cfg(test)]
 mod tests {
     use super::ssh_agent_auth::AgentClient;
+    use super::sign_verify;
+
     #[test]
     fn sshagent_list_identities() {
         let mut agent = AgentClient::new(&"unix:/run/user/1000/piv-ssh-jc.socket");
@@ -160,8 +167,8 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn another() {
-    //     panic!("Make this test fail");
-    // }
+    #[test]
+    fn libsodium_sys_test() {
+        assert!(sign_verify::initialize_library());
+    }
 }
