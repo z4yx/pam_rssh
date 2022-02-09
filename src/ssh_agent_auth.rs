@@ -4,6 +4,7 @@ use ssh_agent::proto;
 use ssh_agent::proto::public_key::PublicKey;
 use ssh_agent::proto::signature;
 use ssh_agent::proto::{from_bytes, to_bytes, Message};
+use log::*;
 
 use std::io::{Read, Write};
 // use std::mem::size_of;
@@ -26,13 +27,11 @@ impl<'a> AgentClient<'a> {
     }
 
     fn read_message(stream: &mut Stream) -> Result<Message, ErrType> {
-        // let mut preamble = [0; 4];
-        // stream.read_exact(&preamble)?;
         let length = stream.read_u32::<BigEndian>()? as usize;
-        println!("read len={}", length);
+        debug!("read_message len={}", length);
         let mut buffer: Vec<u8> = vec![0; length as usize];
         stream.read_exact(buffer.as_mut_slice())?;
-        // println!("read {} bytes: {:?}", buffer.len(), buffer);
+        trace!("read {} bytes: {:?}", buffer.len(), buffer);
         let msg: Message = from_bytes(buffer.as_slice())?;
         Ok(msg)
     }
@@ -40,7 +39,7 @@ impl<'a> AgentClient<'a> {
     fn write_message(stream: &mut Stream, msg: &Message) -> Result<(), ErrType> {
         let mut bytes = to_bytes(&to_bytes(msg)?)?;
         stream.write_all(&mut bytes)?;
-        // println!("written {} bytes: {:?}", bytes.len(), bytes);
+        trace!("written {} bytes: {:?}", bytes.len(), bytes);
         Ok(())
     }
 
@@ -56,7 +55,7 @@ impl<'a> AgentClient<'a> {
             self.stream = None;
         }
         self.stream = Some(Stream::connect(&sockaddr)?);
-        println!("connected to {:?}", sockaddr);
+        info!("connected to {:?}", sockaddr);
         Ok(())
     }
 
@@ -85,7 +84,7 @@ impl<'a> AgentClient<'a> {
         if let Message::IdentitiesAnswer(keys) = msg {
             let mut result = vec![];
             for item in keys {
-                println!("key: {:?} ({})", item.pubkey_blob, item.comment);
+                debug!("list_identities: {:?} ({})", item.pubkey_blob, item.comment);
                 if let Ok(pubkey) = from_bytes(&item.pubkey_blob) {
                     result.push(pubkey);
                 }

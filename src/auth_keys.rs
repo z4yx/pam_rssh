@@ -1,5 +1,6 @@
 use ssh_agent::proto::public_key::PublicKey;
 use ssh_agent::proto::{from_bytes, to_bytes};
+use log::*;
 
 use std::fs;
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
         let mut fields = line.split_whitespace();
         if let Some(algo) = fields.next() {
             if let Some(b64key) = fields.next() {
+                debug!("parse_authorized_keys: {} {}", algo, b64key);
                 let key = base64::decode(b64key)
                     .map_err(|_| RsshErr::PARSE_PUBKEY_ERR)
                     .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::PARSE_PUBKEY_ERR))?;

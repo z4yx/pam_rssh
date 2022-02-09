@@ -3,13 +3,16 @@ extern crate pam;
 
 mod auth_keys;
 mod error;
+mod logger;
 mod sign_verify;
 mod ssh_agent_auth;
 
+use log::*;
 use pam::constants::{PamFlag, PamResultCode, PAM_PROMPT_ECHO_ON};
 use pam::conv::PamConv;
 use pam::module::{PamHandle, PamHooks};
 use ssh_agent::proto::public_key::PublicKey;
+
 use std::ffi::CStr;
 use std::str::FromStr;
 
@@ -42,10 +45,12 @@ fn authenticate_via_agent(
     }
 }
 
+fn enable_debug_log() {
+    log::set_max_level(log::LevelFilter::Debug)
+}
+
 impl PamHooks for PamRssh {
     fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, flags: PamFlag) -> PamResultCode {
-        println!("Let's make sure you're sober enough to perform basic addition");
-
         let mut ssh_agent_addr = "";
         let mut global_auth_keys = "";
         let mut debug = 0u8;
@@ -54,6 +59,7 @@ impl PamHooks for PamRssh {
             if kv.len() == 0 {
                 continue;
             }
+            trace!("Parsing option {:?}", kv);
             match kv[0] {
                 "debug" => {
                     debug = if kv.len() > 1 {
@@ -73,14 +79,18 @@ impl PamHooks for PamRssh {
                     }
                 }
                 default => {
-                    println!("Unknown option {}", kv[0]);
+                    error!("Unknown option {}", kv[0]);
                     return PamResultCode::PAM_SYSTEM_ERR;
                 }
             }
         }
 
+        if debug > 0 {
+            enable_debug_log()
+        }
+
         if (ssh_agent_addr.is_empty()) {
-            println!("Error: SSH agent socket address not configured");
+            error!("SSH agent socket address not configured");
             return PamResultCode::PAM_SYSTEM_ERR;
         }
 
@@ -88,14 +98,14 @@ impl PamHooks for PamRssh {
             let user = match pamh.get_user(None) {
                 Ok(u) => u,
                 Err(e) => {
-                    println!("Error: Failed to get user name");
+                    error!("Failed to get user name");
                     return e;
                 }
             };
             match auth_keys::parse_user_authorized_keys(&user) {
                 Ok(val) => val,
                 Err(err) => {
-                    println!("Error: {}", err);
+                    error!("{}", err);
                     return PamResultCode::PAM_AUTHINFO_UNAVAIL;
                 }
             }
@@ -103,94 +113,119 @@ impl PamHooks for PamRssh {
             match auth_keys::parse_authorized_keys(global_auth_keys) {
                 Ok(val) => val,
                 Err(err) => {
-                    println!("Error: {}", err);
+                    error!("{}", err);
                     return PamResultCode::PAM_AUTHINFO_UNAVAIL;
                 }
             }
         };
 
-        if !sign_verify::initialize_library() {
-            println!("Error: {}", RsshErr::LIBSODIUM_INIT_ERR);
-            return PamResultCode::PAM_SYSTEM_ERR;
-        }
-
         let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr);
         let result = agent.list_identities().and_then(|client_keys| {
-            for key in client_keys {
+            debug!("SSH-agent reports {} keys", client_keys.len());
+            for (i, key) in client_keys.iter().enumerate() {
                 if !is_key_authorized(&key, &authorized_keys) {
-                    println!("key is not authorized");
+                    debug!("Key {} is not authorized", i);
                     continue;
                 }
-                println!("key is authorized");
+                debug!("Key {} is authorized", i);
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
-                        println!("Authenticated");
-                        return Ok(());
+                        info!("Authenticated successfully");
+                        return Ok(true);
                     }
                     Err(e) => {
-                        println!("Error: {}", e);
+                        warn!("Failed to authenticate key {}: {}", i, e);
                         continue; // try next key
                     }
                 }
             }
-            Err(RsshErr::NO_KEY_PASSED_ERR.into_ptr())
+            warn!("None of the keys passed authentication");
+            Ok(false)
         });
         match result {
-            Ok(_) => PamResultCode::PAM_SUCCESS,
+            Ok(true) => PamResultCode::PAM_SUCCESS,
+            Ok(false) => PamResultCode::PAM_AUTH_ERR,
             Err(e) => {
-                println!("Error: {}", e);
+                error!("{}", e);
                 PamResultCode::PAM_AUTH_ERR
             }
         }
     }
 
     fn sm_setcred(_pamh: &PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
-        println!("set credentials");
+        info!("set-credentials is not implemented");
         PamResultCode::PAM_IGNORE
     }
 
     fn acct_mgmt(_pamh: &PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
-        println!("account management");
+        info!("account-management is not implemented");
         PamResultCode::PAM_IGNORE
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::logger::ConsoleLogger;
     use super::sign_verify;
     use super::ssh_agent_auth::AgentClient;
+    use log::debug;
+
+    fn init_log() {
+        log::set_boxed_logger(Box::new(ConsoleLogger))
+            .map(|()| log::set_max_level(log::LevelFilter::Info));
+    }
 
     #[test]
     fn sshagent_list_identities() {
+        init_log();
+        super::enable_debug_log();
         let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
         let result = agent.list_identities();
-        println!("result={:?}", result);
+        debug!("result={:?}", result);
         assert!(result.is_ok());
         let keys = result.unwrap();
         assert!(keys.len() > 0);
         for item in keys {
-            println!("key: {:?}", item);
+            debug!("key: {:?}", item);
         }
     }
 
     #[test]
     fn sshagent_auth() {
+        init_log();
+        super::enable_debug_log();
         let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
         let result = agent.list_identities();
-        println!("result={:?}", result);
+        debug!("result={:?}", result);
         assert!(result.is_ok());
         let keys = result.unwrap();
         assert!(keys.len() > 0);
         for item in keys {
             let data: &[u8] = &[3, 5, 6, 7];
             let sig_ret = agent.sign_data(data, &item);
-            println!("sig_ret={:?}", sig_ret);
+            debug!("sig_ret={:?}", sig_ret);
             assert!(sig_ret.is_ok());
             let sig = sig_ret.unwrap();
             let verify_ret = super::sign_verify::verify_signature(&data, &item, &sig);
-            println!("verify_ret={:?}", verify_ret);
+            debug!("verify_ret={:?}", verify_ret);
             assert!(verify_ret.is_ok());
             assert!(verify_ret.unwrap());
+        }
+    }
+
+    #[test]
+    fn sshagent_more_auth() {
+        init_log();
+        let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
+        let result = agent.list_identities();
+        assert!(result.is_ok());
+        let keys = result.unwrap();
+        assert!(keys.len() > 0);
+        for times in 0..1000 {
+            for item in &keys {
+                let auth_ret = super::authenticate_via_agent(&mut agent, &item);
+                assert!(auth_ret.is_ok());
+            }
         }
     }
 }

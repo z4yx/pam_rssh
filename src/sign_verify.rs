@@ -1,13 +1,8 @@
-// extern crate libc;
-// #[macro_use]
-// extern crate lazy_static;
-// use libc::c_ulonglong;
 use openssl::ec::{EcGroup, EcKey, EcPoint};
 use openssl::nid::Nid;
 use openssl::pkey::{PKey, Public};
 use ssh_agent::proto::public_key::PublicKey;
-
-use std::ffi;
+use log::*;
 
 use super::error::RsshErr;
 
@@ -18,9 +13,10 @@ trait ToOpensslKey {
 }
 impl ToOpensslKey for PublicKey {
     fn to_pkey(&self) -> Result<PKey<Public>, ErrType> {
+        debug!("SSH public key to OpenSSL format:");
         match self {
             PublicKey::EcDsa(input) => {
-                println!("input.identifier={}", input.identifier);
+                debug!("ECDSA key identifier={}", input.identifier);
                 let nid = match input.identifier.as_str() {
                     "nistp256" => Nid::X9_62_PRIME256V1,
                     "nistp384" => Nid::SECP384R1,
@@ -33,14 +29,14 @@ impl ToOpensslKey for PublicKey {
                 Ok(PKey::from_ec_key(EcKey::from_public_key(&group, &pt)?)?)
             }
             PublicKey::Ed25519(input) => {
-                println!("input ed25519");
+                debug!("ED25519 key");
                 Ok(PKey::public_key_from_raw_bytes(
                     &input.enc_a,
                     openssl::pkey::Id::ED25519,
                 )?)
             }
             PublicKey::Rsa(input) => {
-                println!("input RSA");
+                debug!("RSA key");
                 use openssl::bn::BigNum;
                 use openssl::rsa::Rsa;
                 let e = BigNum::from_slice(&input.e)?;
@@ -50,10 +46,6 @@ impl ToOpensslKey for PublicKey {
             _ => Err(RsshErr::PARSE_PUBKEY_ERR.into_ptr()),
         }
     }
-}
-
-pub fn initialize_library() -> bool {
-    true
 }
 
 pub fn verify_signature(
