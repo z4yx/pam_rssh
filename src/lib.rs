@@ -17,6 +17,7 @@ use std::ffi::CStr;
 use std::str::FromStr;
 
 use self::error::RsshErr;
+use self::logger::ConsoleLogger;
 
 type ErrType = Box<dyn std::error::Error>;
 
@@ -51,6 +52,12 @@ fn enable_debug_log() {
 
 impl PamHooks for PamRssh {
     fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, flags: PamFlag) -> PamResultCode {
+        if (flags & pam::constants::PAM_SILENT) == 0 {
+            log::set_boxed_logger(Box::new(ConsoleLogger))
+                .map(|()| log::set_max_level(log::LevelFilter::Warn));
+
+        }
+
         let mut ssh_agent_addr = "";
         let mut global_auth_keys = "";
         let mut debug = 0u8;
@@ -78,7 +85,7 @@ impl PamHooks for PamRssh {
                         global_auth_keys = kv[1];
                     }
                 }
-                default => {
+                _ => {
                     error!("Unknown option {}", kv[0]);
                     return PamResultCode::PAM_SYSTEM_ERR;
                 }
@@ -165,7 +172,6 @@ impl PamHooks for PamRssh {
 
 #[cfg(test)]
 mod tests {
-    use super::logger::ConsoleLogger;
     use super::sign_verify;
     use super::ssh_agent_auth::AgentClient;
     use log::debug;
