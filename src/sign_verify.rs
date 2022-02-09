@@ -29,7 +29,7 @@ impl ToOpensslKey for PublicKey {
                 };
                 let group = EcGroup::from_curve_name(nid)?;
                 let mut ctx = openssl::bn::BigNumContext::new()?;
-                let pt = EcPoint::from_bytes(&group, q, &mut ctx)?;
+                let pt = EcPoint::from_bytes(&group, &input.q, &mut ctx)?;
                 Ok(PKey::from_ec_key(EcKey::from_public_key(&group, &pt)?)?)
             }
             PublicKey::Ed25519(input) => {
@@ -40,6 +40,7 @@ impl ToOpensslKey for PublicKey {
                 )?)
             }
             PublicKey::Rsa(input) => {
+                println!("input RSA");
                 use openssl::bn::BigNum;
                 use openssl::rsa::Rsa;
                 let e = BigNum::from_slice(&input.e)?;

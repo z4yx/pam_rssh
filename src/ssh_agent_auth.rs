@@ -1,9 +1,9 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use multisock::{SocketAddr, Stream};
 use ssh_agent::proto;
-use ssh_agent::proto::{from_bytes, to_bytes, Message};
 use ssh_agent::proto::public_key::PublicKey;
 use ssh_agent::proto::signature;
+use ssh_agent::proto::{from_bytes, to_bytes, Message};
 
 use std::io::{Read, Write};
 // use std::mem::size_of;
@@ -32,7 +32,7 @@ impl<'a> AgentClient<'a> {
         println!("read len={}", length);
         let mut buffer: Vec<u8> = vec![0; length as usize];
         stream.read_exact(buffer.as_mut_slice())?;
-        println!("read {} bytes: {:?}", buffer.len(), buffer);
+        // println!("read {} bytes: {:?}", buffer.len(), buffer);
         let msg: Message = from_bytes(buffer.as_slice())?;
         Ok(msg)
     }
@@ -40,12 +40,17 @@ impl<'a> AgentClient<'a> {
     fn write_message(stream: &mut Stream, msg: &Message) -> Result<(), ErrType> {
         let mut bytes = to_bytes(&to_bytes(msg)?)?;
         stream.write_all(&mut bytes)?;
-        println!("written {} bytes: {:?}", bytes.len(), bytes);
+        // println!("written {} bytes: {:?}", bytes.len(), bytes);
         Ok(())
     }
 
     fn connect(&mut self) -> Result<(), ErrType> {
-        let sockaddr: SocketAddr = self.addr.parse()?;
+        let addr = if self.addr.starts_with('/') {
+            String::from("unix:") + self.addr
+        } else {
+            String::from(self.addr)
+        };
+        let sockaddr: SocketAddr = addr.parse()?;
         if let Some(ref mut s) = self.stream {
             let _ = s.shutdown(Shutdown::Both);
             self.stream = None;
@@ -91,21 +96,47 @@ impl<'a> AgentClient<'a> {
         }
     }
 
-    pub fn sign_data<'b>(&mut self, data: &'b [u8], pubkey: &'b PublicKey) -> Result<Vec<u8>, ErrType> {
-        let flags = if let PublicKey::Rsa(_) = pubkey {
-            signature::RSA_SHA2_256
+    fn decode_signature_blob(blob: &[u8], isECDSA: bool) -> Result<Vec<u8>, ErrType> {
+        let sig: proto::Signature = from_bytes(&blob)?;
+        if isECDSA {
+            use openssl::ecdsa::EcdsaSig;
+            use openssl::bn::BigNum;
+
+            let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
+            // println!("r={:?}\ns={:?}", data.r, data.s);
+            let r = BigNum::from_slice(&data.r)?;
+            let s = BigNum::from_slice(&data.s)?;
+
+            Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
         } else {
-            0
-        };
+            Ok(sig.blob)
+        }
+    }
+
+    pub fn sign_data<'b>(
+        &mut self,
+        data: &'b [u8],
+        pubkey: &'b PublicKey,
+    ) -> Result<Vec<u8>, ErrType> {
+        let mut flags = 0u32;
+        let mut is_ecdsa = false;
+        match pubkey {
+            PublicKey::Rsa(_) => flags = signature::RSA_SHA2_256,
+            PublicKey::EcDsa(_) => is_ecdsa = true,
+            _ => {}
+        }
         let args = proto::SignRequest {
             pubkey_blob: to_bytes(pubkey)?,
             data: data.to_vec(),
             flags,
         };
         let msg = self.call_agent(&Message::SignRequest(args), NET_RETRY_CNT)?;
+        if let Message::Failure = msg {
+            return Err(RsshErr::AGENT_FAILURE_ERR.into_ptr());
+        }
         if let Message::SignResponse(val) = msg {
-            println!("signature: {:?}", val);
-            Ok(val)
+            // println!("signature payload: {:?}", val);
+            Ok(Self::decode_signature_blob(&val, is_ecdsa)?)
         } else {
             Err(RsshErr::INVALID_RSP_ERR.into_ptr())
         }

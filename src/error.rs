@@ -6,6 +6,7 @@ use std::fmt::{Display, Result};
 pub enum RsshErr {
     FILE_READ_ERR(String),
     PARSE_PUBKEY_ERR,
+    AGENT_FAILURE_ERR,
     SIGN_VERIFY_ERR,
     RETRY_LT_1_ERR,
     INVALID_RSP_ERR,
@@ -28,6 +29,7 @@ impl Display for RsshErr {
         let msg = match self {
             RsshErr::FILE_READ_ERR(name) => format!("Failed to read: {}", name),
             RsshErr::PARSE_PUBKEY_ERR => "Failed to parse the public key".to_string(),
+            RsshErr::AGENT_FAILURE_ERR => "SSH-Agent reports failure".to_string(),
             RsshErr::SIGN_VERIFY_ERR => "Signature verification failed".to_string(),
             RsshErr::RETRY_LT_1_ERR => "Number of retry is less than one".to_string(),
             RsshErr::INVALID_RSP_ERR => "Invalid type of response".to_string(),

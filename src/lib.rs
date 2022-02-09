@@ -34,8 +34,12 @@ fn authenticate_via_agent(
 ) -> Result<(), ErrType> {
     let challenge = sign_verify::gen_challenge()?;
     let sig = agent.sign_data(&challenge, pubkey)?;
-    let _ = sign_verify::verify_signature(&challenge, pubkey, &sig)?;
-    Ok(())
+    let verified = sign_verify::verify_signature(&challenge, pubkey, &sig)?;
+    if verified {
+        Ok(())
+    } else {
+        Err(RsshErr::SIGN_VERIFY_ERR.into_ptr())
+    }
 }
 
 impl PamHooks for PamRssh {
@@ -114,8 +118,10 @@ impl PamHooks for PamRssh {
         let result = agent.list_identities().and_then(|client_keys| {
             for key in client_keys {
                 if !is_key_authorized(&key, &authorized_keys) {
+                    println!("key is not authorized");
                     continue;
                 }
+                println!("key is authorized");
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
                         println!("Authenticated");
@@ -151,12 +157,12 @@ impl PamHooks for PamRssh {
 
 #[cfg(test)]
 mod tests {
-    use super::ssh_agent_auth::AgentClient;
     use super::sign_verify;
+    use super::ssh_agent_auth::AgentClient;
 
     #[test]
     fn sshagent_list_identities() {
-        let mut agent = AgentClient::new(&"unix:/run/user/1000/piv-ssh-jc.socket");
+        let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
         let result = agent.list_identities();
         println!("result={:?}", result);
         assert!(result.is_ok());
@@ -168,7 +174,23 @@ mod tests {
     }
 
     #[test]
-    fn libsodium_sys_test() {
-        assert!(sign_verify::initialize_library());
+    fn sshagent_auth() {
+        let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
+        let result = agent.list_identities();
+        println!("result={:?}", result);
+        assert!(result.is_ok());
+        let keys = result.unwrap();
+        assert!(keys.len() > 0);
+        for item in keys {
+            let data: &[u8] = &[3, 5, 6, 7];
+            let sig_ret = agent.sign_data(data, &item);
+            println!("sig_ret={:?}", sig_ret);
+            assert!(sig_ret.is_ok());
+            let sig = sig_ret.unwrap();
+            let verify_ret = super::sign_verify::verify_signature(&data, &item, &sig);
+            println!("verify_ret={:?}", verify_ret);
+            assert!(verify_ret.is_ok());
+            assert!(verify_ret.unwrap());
+        }
     }
 }
