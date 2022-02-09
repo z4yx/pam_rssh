@@ -11,6 +11,8 @@ pub enum RsshErr {
     RETRY_LT_1_ERR,
     INVALID_RSP_ERR,
     NO_KEY_PASSED_ERR,
+    GET_USER_ERR,
+    GET_HOME_ERR,
 }
 
 impl RsshErr {
@@ -33,6 +35,8 @@ impl Display for RsshErr {
             RsshErr::RETRY_LT_1_ERR => "Number of retry is less than one".to_string(),
             RsshErr::INVALID_RSP_ERR => "Invalid type of response".to_string(),
             RsshErr::NO_KEY_PASSED_ERR => "None of keys passed authentication".to_string(),
+            RsshErr::GET_USER_ERR => "Failed to get user name".to_string(),
+            RsshErr::GET_HOME_ERR => "Cannot get user's home directory".to_string(),
         };
         f.write_str(&msg);
         Ok(())

@@ -1,6 +1,7 @@
 use ssh_agent::proto::public_key::PublicKey;
 use ssh_agent::proto::{from_bytes, to_bytes};
 use log::*;
+use dirs::home_dir;
 
 use std::fs;
 use std::path::PathBuf;
@@ -30,8 +31,8 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
 }
 
 pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
-    let path: PathBuf = ["/home", username, ".ssh", "authorized_keys"]
-        .iter()
-        .collect();
-    parse_authorized_keys(path.to_str().unwrap_or(""))
+    let mut path = home_dir().ok_or(RsshErr::GET_HOME_ERR.into_ptr())?;
+    path.push(".ssh");
+    path.push("authorized_keys");
+    parse_authorized_keys(path.to_str().ok_or(RsshErr::GET_HOME_ERR.into_ptr())?)
 }

@@ -32,6 +32,18 @@ fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool 
     }
     false
 }
+
+fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<PublicKey>, ErrType> {
+    if auth_key_file.len() == 0 {
+        let user = pamh
+            .get_user(None)
+            .map_err(|_| RsshErr::GET_USER_ERR.into_ptr())?;
+        auth_keys::parse_user_authorized_keys(&user)
+    } else {
+        auth_keys::parse_authorized_keys(auth_key_file)
+    }
+}
+
 fn authenticate_via_agent(
     agent: &mut ssh_agent_auth::AgentClient,
     pubkey: &PublicKey,
@@ -55,11 +67,10 @@ impl PamHooks for PamRssh {
         if (flags & pam::constants::PAM_SILENT) == 0 {
             log::set_boxed_logger(Box::new(ConsoleLogger))
                 .map(|()| log::set_max_level(log::LevelFilter::Warn));
-
         }
 
         let mut ssh_agent_addr = "";
-        let mut global_auth_keys = "";
+        let mut auth_key_file = "";
         let mut debug = 0u8;
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
@@ -80,9 +91,9 @@ impl PamHooks for PamRssh {
                         ssh_agent_addr = kv[1];
                     }
                 }
-                "global_auth_keys" => {
+                "auth_key_file" => {
                     if kv.len() > 1 {
-                        global_auth_keys = kv[1];
+                        auth_key_file = kv[1];
                     }
                 }
                 _ => {
@@ -96,33 +107,19 @@ impl PamHooks for PamRssh {
             enable_debug_log()
         }
 
-        if (ssh_agent_addr.is_empty()) {
-            error!("SSH agent socket address not configured");
-            return PamResultCode::PAM_SYSTEM_ERR;
+        if ssh_agent_addr.is_empty() {
+            ssh_agent_addr = env!("SSH_AUTH_SOCK");
+            if ssh_agent_addr.is_empty() {
+                error!("SSH agent socket address not configured");
+                return PamResultCode::PAM_AUTHINFO_UNAVAIL;
+            }
         }
 
-        let authorized_keys = if global_auth_keys.len() == 0 {
-            let user = match pamh.get_user(None) {
-                Ok(u) => u,
-                Err(e) => {
-                    error!("Failed to get user name");
-                    return e;
-                }
-            };
-            match auth_keys::parse_user_authorized_keys(&user) {
-                Ok(val) => val,
-                Err(err) => {
-                    error!("{}", err);
-                    return PamResultCode::PAM_AUTHINFO_UNAVAIL;
-                }
-            }
-        } else {
-            match auth_keys::parse_authorized_keys(global_auth_keys) {
-                Ok(val) => val,
-                Err(err) => {
-                    error!("{}", err);
-                    return PamResultCode::PAM_AUTHINFO_UNAVAIL;
-                }
+        let authorized_keys = match read_authorized_keys(pamh, &auth_key_file) {
+            Ok(u) => u,
+            Err(e) => {
+                error!("read_authorized_keys: {}", e);
+                return PamResultCode::PAM_CRED_INSUFFICIENT;
             }
         };
 
@@ -177,7 +174,7 @@ mod tests {
     use log::debug;
 
     fn init_log() {
-        log::set_boxed_logger(Box::new(ConsoleLogger))
+        log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
             .map(|()| log::set_max_level(log::LevelFilter::Info));
     }
 
@@ -232,6 +229,20 @@ mod tests {
                 let auth_ret = super::authenticate_via_agent(&mut agent, &item);
                 assert!(auth_ret.is_ok());
             }
+        }
+    }
+
+    #[test]
+    fn parse_user_authorized_keys() {
+        init_log();
+        super::enable_debug_log();
+        let username = env!("USER");
+        let result = super::auth_keys::parse_user_authorized_keys(&username);
+        assert!(result.is_ok());
+        let keys = result.unwrap();
+        assert!(keys.len() > 0);
+        for item in keys {
+            debug!("key: {:?}", item);
         }
     }
 }
