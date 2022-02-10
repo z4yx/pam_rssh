@@ -16,7 +16,7 @@ impl ToOpensslKey for PublicKey {
         debug!("SSH public key to OpenSSL format:");
         match self {
             PublicKey::EcDsa(input) => {
-                debug!("ECDSA key identifier={}", input.identifier);
+                debug!("    ECDSA key identifier={}", input.identifier);
                 let nid = match input.identifier.as_str() {
                     "nistp256" => Nid::X9_62_PRIME256V1,
                     "nistp384" => Nid::SECP384R1,
@@ -24,19 +24,20 @@ impl ToOpensslKey for PublicKey {
                     _ => return Err(RsshErr::PARSE_PUBKEY_ERR.into_ptr()),
                 };
                 let group = EcGroup::from_curve_name(nid)?;
+                debug!("    Curve group: {}", nid.long_name()?);
                 let mut ctx = openssl::bn::BigNumContext::new()?;
                 let pt = EcPoint::from_bytes(&group, &input.q, &mut ctx)?;
                 Ok(PKey::from_ec_key(EcKey::from_public_key(&group, &pt)?)?)
             }
             PublicKey::Ed25519(input) => {
-                debug!("ED25519 key");
+                debug!("    ED25519 key");
                 Ok(PKey::public_key_from_raw_bytes(
                     &input.enc_a,
                     openssl::pkey::Id::ED25519,
                 )?)
             }
             PublicKey::Rsa(input) => {
-                debug!("RSA key");
+                debug!("    RSA key");
                 use openssl::bn::BigNum;
                 use openssl::rsa::Rsa;
                 let e = BigNum::from_slice(&input.e)?;

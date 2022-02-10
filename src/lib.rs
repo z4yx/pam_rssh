@@ -12,6 +12,7 @@ use pam::constants::{PamFlag, PamResultCode, PAM_PROMPT_ECHO_ON};
 use pam::conv::PamConv;
 use pam::module::{PamHandle, PamHooks};
 use ssh_agent::proto::public_key::PublicKey;
+use syslog::{BasicLogger, Facility, Formatter3164};
 
 use std::ffi::CStr;
 use std::str::FromStr;
@@ -38,8 +39,10 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
         let user = pamh
             .get_user(None)
             .map_err(|_| RsshErr::GET_USER_ERR.into_ptr())?;
+        info!("Reading authorized_keys of user {}", user);
         auth_keys::parse_user_authorized_keys(&user)
     } else {
+        info!("Reading configured authorized_keys file: {}", auth_key_file);
         auth_keys::parse_authorized_keys(auth_key_file)
     }
 }
@@ -65,7 +68,16 @@ fn enable_debug_log() {
 impl PamHooks for PamRssh {
     fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, flags: PamFlag) -> PamResultCode {
         if (flags & pam::constants::PAM_SILENT) == 0 {
-            log::set_boxed_logger(Box::new(ConsoleLogger))
+            let formatter = Formatter3164 {
+                facility: Facility::LOG_AUTH,
+                hostname: None,
+                process: "pam_rssh".into(),
+                pid: std::process::id() as i32,
+            };
+            syslog::unix(formatter)
+                .ok()
+                .and_then(|logger| log::set_boxed_logger(Box::new(BasicLogger::new(logger))).ok())
+                .or_else(|| log::set_boxed_logger(Box::new(ConsoleLogger)).ok())
                 .map(|()| log::set_max_level(log::LevelFilter::Warn));
         }
 
@@ -134,7 +146,7 @@ impl PamHooks for PamRssh {
                 debug!("Key {} is authorized", i);
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
-                        info!("Authenticated successfully");
+                        info!("Successful authentication");
                         return Ok(true);
                     }
                     Err(e) => {

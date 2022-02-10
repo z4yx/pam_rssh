@@ -102,12 +102,13 @@ impl<'a> AgentClient<'a> {
             use openssl::bn::BigNum;
 
             let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
-            // println!("r={:?}\ns={:?}", data.r, data.s);
+            trace!("ECDSA signature: r={:?} s={:?}", data.r, data.s);
             let r = BigNum::from_slice(&data.r)?;
             let s = BigNum::from_slice(&data.s)?;
 
             Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
         } else {
+            trace!("signature: blob={:?}", sig.blob);
             Ok(sig.blob)
         }
     }
