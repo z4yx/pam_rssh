@@ -12,14 +12,9 @@ crate-type = ["cdylib"]
 pam = { path = "./dep/pam-rs/pam" }
 ssh-agent = "0.2.3"
 multisock = "1.0.0"
-#tokio = "0.1.15"
-#bytes = "0.4.11"
 byteorder = "1.2.7"
 base64 = "0.13.0"
-#libsodium-sys = "0.2.7"
-#lazy_static = "1.4.0"
 openssl-sys = "^0.9"
 openssl = "^0.10"
 log = { version = "^0.4", features = ["std", "serde"] }
-dirs = "^1.0"
 syslog = "^5.0"
