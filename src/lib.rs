@@ -35,9 +35,7 @@ fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool 
 
 fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<PublicKey>, ErrType> {
     if auth_key_file.len() == 0 {
-        let user = pamh
-            .get_user(None)
-            .map_err(|_| RsshErr::GetUserErr)?;
+        let user = pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?;
         info!("Reading authorized_keys of user {}", user);
         auth_keys::parse_user_authorized_keys(&user)
     } else {
@@ -60,29 +58,33 @@ fn authenticate_via_agent(
     }
 }
 
+fn setup_logger() {
+    let formatter = Formatter3164 {
+        facility: Facility::LOG_AUTH,
+        hostname: None,
+        process: "pam_rssh".into(),
+        pid: std::process::id() as i32,
+    };
+    syslog::unix(formatter)
+        .ok()
+        .and_then(|logger| log::set_boxed_logger(Box::new(BasicLogger::new(logger))).ok())
+        .or_else(|| log::set_boxed_logger(Box::new(ConsoleLogger)).ok())
+        .map(|()| log::set_max_level(log::LevelFilter::Warn));
+}
+
 fn enable_debug_log() {
     log::set_max_level(log::LevelFilter::Debug)
 }
 
 impl PamHooks for PamRssh {
-    fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, flags: PamFlag) -> PamResultCode {
-        if (flags & pam::constants::PAM_SILENT) == 0 {
-            let formatter = Formatter3164 {
-                facility: Facility::LOG_AUTH,
-                hostname: None,
-                process: "pam_rssh".into(),
-                pid: std::process::id() as i32,
-            };
-            syslog::unix(formatter)
-                .ok()
-                .and_then(|logger| log::set_boxed_logger(Box::new(BasicLogger::new(logger))).ok())
-                .or_else(|| log::set_boxed_logger(Box::new(ConsoleLogger)).ok())
-                .map(|()| log::set_max_level(log::LevelFilter::Warn));
+    fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+        /* if (flags & pam::constants::PAM_SILENT) == 0 */
+        {
+            setup_logger();
         }
 
         let mut ssh_agent_addr = "";
         let mut auth_key_file = "";
-        let mut debug = 0u8;
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
             if kv.len() == 0 {
@@ -90,13 +92,13 @@ impl PamHooks for PamRssh {
             }
             trace!("Parsing option {:?}", kv);
             match kv[0] {
-                "debug" => {
-                    debug = if kv.len() > 1 {
-                        u8::from_str(kv[1]).unwrap_or(0)
-                    } else {
-                        1
-                    };
+                "loglevel" => {
+                    if kv.len() > 1 {
+                        let _ = log::Level::from_str(kv[1])
+                            .and_then(|level| Ok(log::set_max_level(level.to_level_filter())));
+                    }
                 }
+                "debug" => log::set_max_level(log::LevelFilter::Debug),
                 "ssh_agent_addr" => {
                     if kv.len() > 1 {
                         ssh_agent_addr = kv[1];
@@ -108,14 +110,10 @@ impl PamHooks for PamRssh {
                     }
                 }
                 _ => {
-                    error!("Unknown option {}", kv[0]);
+                    error!("Unknown option `{}`", kv[0]);
                     return PamResultCode::PAM_SYSTEM_ERR;
                 }
             }
-        }
-
-        if debug > 0 {
-            enable_debug_log()
         }
 
         if ssh_agent_addr.is_empty() {
@@ -127,7 +125,10 @@ impl PamHooks for PamRssh {
         }
 
         let authorized_keys = match read_authorized_keys(pamh, &auth_key_file) {
-            Ok(u) => u,
+            Ok(u) => {
+                info!("Got {} entries from authorized_keys", u.len());
+                u
+            },
             Err(e) => {
                 error!("read_authorized_keys: {}", e);
                 return PamResultCode::PAM_CRED_INSUFFICIENT;
@@ -186,7 +187,8 @@ mod tests {
 
     fn init_log() {
         log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
-            .map(|()| log::set_max_level(log::LevelFilter::Info)).unwrap();
+            .map(|()| log::set_max_level(log::LevelFilter::Info))
+            .unwrap();
     }
 
     #[test]
