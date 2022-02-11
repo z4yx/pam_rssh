@@ -8,8 +8,7 @@ mod sign_verify;
 mod ssh_agent_auth;
 
 use log::*;
-use pam::constants::{PamFlag, PamResultCode, PAM_PROMPT_ECHO_ON};
-use pam::conv::PamConv;
+use pam::constants::{PamFlag, PamResultCode};
 use pam::module::{PamHandle, PamHooks};
 use ssh_agent::proto::public_key::PublicKey;
 use syslog::{BasicLogger, Facility, Formatter3164};
@@ -187,7 +186,7 @@ mod tests {
 
     fn init_log() {
         log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
-            .map(|()| log::set_max_level(log::LevelFilter::Info));
+            .map(|()| log::set_max_level(log::LevelFilter::Info)).unwrap();
     }
 
     #[test]
@@ -236,7 +235,7 @@ mod tests {
         assert!(result.is_ok());
         let keys = result.unwrap();
         assert!(keys.len() > 0);
-        for times in 0..1000 {
+        for _ in 0..1000 {
             for item in &keys {
                 let auth_ret = super::authenticate_via_agent(&mut agent, &item);
                 assert!(auth_ret.is_ok());

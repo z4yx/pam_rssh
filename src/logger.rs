@@ -1,4 +1,4 @@
-use log::{Record, Level, Metadata};
+use log::{Metadata, Record};
 
 pub struct ConsoleLogger;
 

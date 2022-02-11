@@ -54,7 +54,7 @@ pub fn verify_signature(
     pubkey: &PublicKey,
     signature: &[u8],
 ) -> Result<bool, ErrType> {
-    use openssl::hash::{hash, MessageDigest};
+    use openssl::hash::MessageDigest;
     use openssl::sign::Verifier;
 
     let pkey = pubkey.to_pkey()?;

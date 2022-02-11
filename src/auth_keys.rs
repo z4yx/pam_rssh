@@ -1,5 +1,5 @@
 use ssh_agent::proto::public_key::PublicKey;
-use ssh_agent::proto::{from_bytes, to_bytes};
+use ssh_agent::proto::from_bytes;
 use log::*;
 
 use std::fs;

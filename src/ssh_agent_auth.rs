@@ -95,9 +95,9 @@ impl<'a> AgentClient<'a> {
         }
     }
 
-    fn decode_signature_blob(blob: &[u8], isECDSA: bool) -> Result<Vec<u8>, ErrType> {
+    fn decode_signature_blob(blob: &[u8], is_ecdsa: bool) -> Result<Vec<u8>, ErrType> {
         let sig: proto::Signature = from_bytes(&blob)?;
-        if isECDSA {
+        if is_ecdsa {
             use openssl::ecdsa::EcdsaSig;
             use openssl::bn::BigNum;
 

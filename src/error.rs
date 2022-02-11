@@ -15,9 +15,6 @@ pub enum RsshErr {
 }
 
 impl RsshErr {
-    pub fn new(val: RsshErr) -> Box<Self> {
-        Box::new(val)
-    }
     pub fn into_ptr(self) -> Box<Self> {
         Box::new(self)
     }
