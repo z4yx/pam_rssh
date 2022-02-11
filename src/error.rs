@@ -4,15 +4,14 @@ use std::fmt::{Display, Result};
 
 #[derive(Debug)]
 pub enum RsshErr {
-    FILE_READ_ERR(String),
-    PARSE_PUBKEY_ERR,
-    AGENT_FAILURE_ERR,
-    SIGN_VERIFY_ERR,
-    RETRY_LT_1_ERR,
-    INVALID_RSP_ERR,
-    NO_KEY_PASSED_ERR,
-    GET_USER_ERR,
-    GET_HOME_ERR,
+    FileReadErr(String),
+    ParsePubkeyErr,
+    AgentFailureErr,
+    SignVerifyErr,
+    RetryLT1Err,
+    InvalidRspErr,
+    GetUserErr,
+    GetHomeErr,
 }
 
 impl RsshErr {
@@ -24,22 +23,25 @@ impl RsshErr {
     }
 }
 
+macro_rules! S {
+    ($s:expr) => {
+        String::from($s)
+    };
+}
+
 impl Display for RsshErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        // write!(f, )
         let msg = match self {
-            RsshErr::FILE_READ_ERR(name) => format!("Failed to read: {}", name),
-            RsshErr::PARSE_PUBKEY_ERR => "Failed to parse the public key".to_string(),
-            RsshErr::AGENT_FAILURE_ERR => "SSH-Agent reports failure".to_string(),
-            RsshErr::SIGN_VERIFY_ERR => "Signature verification failed".to_string(),
-            RsshErr::RETRY_LT_1_ERR => "Number of retry is less than one".to_string(),
-            RsshErr::INVALID_RSP_ERR => "Invalid type of response".to_string(),
-            RsshErr::NO_KEY_PASSED_ERR => "None of keys passed authentication".to_string(),
-            RsshErr::GET_USER_ERR => "Failed to get user name".to_string(),
-            RsshErr::GET_HOME_ERR => "Cannot get user's home directory".to_string(),
+            RsshErr::FileReadErr(name) => format!("Failed to read `{}`", name),
+            RsshErr::ParsePubkeyErr => S!("Failed to parse the public key"),
+            RsshErr::AgentFailureErr => S!("SSH-Agent reports failure"),
+            RsshErr::SignVerifyErr => S!("Signature verification failed"),
+            RsshErr::RetryLT1Err => S!("Number of retry is less than one"),
+            RsshErr::InvalidRspErr => S!("Invalid type of response"),
+            RsshErr::GetUserErr => S!("Failed to get user name"),
+            RsshErr::GetHomeErr => S!("Cannot get user's home directory"),
         };
-        f.write_str(&msg);
-        Ok(())
+        f.write_str(&msg)
     }
 }
 

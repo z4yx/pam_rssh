@@ -11,7 +11,7 @@ type ErrType = Box<dyn std::error::Error>;
 
 pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> {
     let content = fs::read_to_string(filename)
-        .map_err(|_| RsshErr::FILE_READ_ERR(filename.to_string()))?;
+        .map_err(|_| RsshErr::FileReadErr(filename.to_string()))?;
     let mut lines = content.lines();
     let mut res: Vec<PublicKey> = vec![];
     while let Some(line) = lines.next() {
@@ -20,8 +20,8 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
             if let Some(b64key) = fields.next() {
                 debug!("parse_authorized_keys: {} {}", algo, b64key);
                 let key = base64::decode(b64key)
-                    .map_err(|_| RsshErr::PARSE_PUBKEY_ERR)
-                    .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::PARSE_PUBKEY_ERR))?;
+                    .map_err(|_| RsshErr::ParsePubkeyErr)
+                    .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::ParsePubkeyErr))?;
                 res.push(key);
             }
         }
@@ -33,5 +33,5 @@ pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrT
     let path: PathBuf = ["/home", username, ".ssh", "authorized_keys"]
         .iter()
         .collect();
-    parse_authorized_keys(path.to_str().ok_or(RsshErr::GET_HOME_ERR)?)
+    parse_authorized_keys(path.to_str().ok_or(RsshErr::GetHomeErr)?)
 }

@@ -69,7 +69,7 @@ impl<'a> AgentClient<'a> {
     }
 
     fn call_agent(&mut self, cmd: &Message, retry: u32) -> Result<Message, ErrType> {
-        let mut ret: Result<Message, ErrType> = Err(RsshErr::RETRY_LT_1_ERR.into_ptr());
+        let mut ret: Result<Message, ErrType> = Err(RsshErr::RetryLT1Err.into_ptr());
         for _i in 0..retry {
             ret = self.call_agent_once(cmd);
             if let Ok(val) = ret {
@@ -91,7 +91,7 @@ impl<'a> AgentClient<'a> {
             }
             Ok(result)
         } else {
-            Err(RsshErr::INVALID_RSP_ERR.into_ptr())
+            Err(RsshErr::InvalidRspErr.into_ptr())
         }
     }
 
@@ -132,13 +132,13 @@ impl<'a> AgentClient<'a> {
         };
         let msg = self.call_agent(&Message::SignRequest(args), NET_RETRY_CNT)?;
         if let Message::Failure = msg {
-            return Err(RsshErr::AGENT_FAILURE_ERR.into_ptr());
+            return Err(RsshErr::AgentFailureErr.into_ptr());
         }
         if let Message::SignResponse(val) = msg {
             // println!("signature payload: {:?}", val);
             Ok(Self::decode_signature_blob(&val, is_ecdsa)?)
         } else {
-            Err(RsshErr::INVALID_RSP_ERR.into_ptr())
+            Err(RsshErr::InvalidRspErr.into_ptr())
         }
     }
 }

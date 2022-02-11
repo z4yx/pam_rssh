@@ -21,7 +21,7 @@ impl ToOpensslKey for PublicKey {
                     "nistp256" => Nid::X9_62_PRIME256V1,
                     "nistp384" => Nid::SECP384R1,
                     "nistp521" => Nid::SECP521R1,
-                    _ => return Err(RsshErr::PARSE_PUBKEY_ERR.into_ptr()),
+                    _ => return Err(RsshErr::ParsePubkeyErr.into_ptr()),
                 };
                 let group = EcGroup::from_curve_name(nid)?;
                 debug!("    Curve group: {}", nid.long_name()?);
@@ -44,7 +44,7 @@ impl ToOpensslKey for PublicKey {
                 let n = BigNum::from_slice(&input.n)?;
                 Ok(PKey::from_rsa(Rsa::from_public_components(n, e)?)?)
             }
-            _ => Err(RsshErr::PARSE_PUBKEY_ERR.into_ptr()),
+            _ => Err(RsshErr::ParsePubkeyErr.into_ptr()),
         }
     }
 }

@@ -38,7 +38,7 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
     if auth_key_file.len() == 0 {
         let user = pamh
             .get_user(None)
-            .map_err(|_| RsshErr::GET_USER_ERR.into_ptr())?;
+            .map_err(|_| RsshErr::GetUserErr)?;
         info!("Reading authorized_keys of user {}", user);
         auth_keys::parse_user_authorized_keys(&user)
     } else {
@@ -57,7 +57,7 @@ fn authenticate_via_agent(
     if verified {
         Ok(())
     } else {
-        Err(RsshErr::SIGN_VERIFY_ERR.into_ptr())
+        Err(RsshErr::SignVerifyErr.into_ptr())
     }
 }
 
