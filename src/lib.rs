@@ -116,8 +116,14 @@ impl PamHooks for PamRssh {
             }
         }
 
+        let addr_from_env;
         if ssh_agent_addr.is_empty() {
-            ssh_agent_addr = env!("SSH_AUTH_SOCK");
+            let agent_addr_os = std::env::var_os("SSH_AUTH_SOCK");
+            if let Some(a) = agent_addr_os {
+                addr_from_env = a;
+                ssh_agent_addr = addr_from_env.to_str().unwrap_or("");
+            }
+            debug!("SSH-Agent address: {}", ssh_agent_addr);
             if ssh_agent_addr.is_empty() {
                 error!("SSH agent socket address not configured");
                 return PamResultCode::PAM_AUTHINFO_UNAVAIL;
@@ -137,7 +143,7 @@ impl PamHooks for PamRssh {
 
         let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr);
         let result = agent.list_identities().and_then(|client_keys| {
-            debug!("SSH-agent reports {} keys", client_keys.len());
+            debug!("SSH-Agent reports {} keys", client_keys.len());
             for (i, key) in client_keys.iter().enumerate() {
                 if !is_key_authorized(&key, &authorized_keys) {
                     debug!("Key {} is not authorized", i);
@@ -155,7 +161,7 @@ impl PamHooks for PamRssh {
                     }
                 }
             }
-            warn!("None of the keys passed authentication");
+            warn!("None of these keys passed authentication");
             Ok(false)
         });
         match result {
@@ -168,14 +174,10 @@ impl PamHooks for PamRssh {
         }
     }
 
+    // Always return PAM_SUCCESS for sm_setcred, just like pam-u2f
     fn sm_setcred(_pamh: &PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         info!("set-credentials is not implemented");
-        PamResultCode::PAM_IGNORE
-    }
-
-    fn acct_mgmt(_pamh: &PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
-        info!("account-management is not implemented");
-        PamResultCode::PAM_IGNORE
+        PamResultCode::PAM_SUCCESS
     }
 }
 
