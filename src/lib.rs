@@ -72,10 +72,6 @@ fn setup_logger() {
         .map(|()| log::set_max_level(log::LevelFilter::Warn));
 }
 
-fn enable_debug_log() {
-    log::set_max_level(log::LevelFilter::Debug)
-}
-
 impl PamHooks for PamRssh {
     fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         /* if (flags & pam::constants::PAM_SILENT) == 0 */
@@ -183,7 +179,6 @@ impl PamHooks for PamRssh {
 
 #[cfg(test)]
 mod tests {
-    use super::sign_verify;
     use super::ssh_agent_auth::AgentClient;
     use log::debug;
 
@@ -193,10 +188,14 @@ mod tests {
             .unwrap();
     }
 
+    fn enable_debug_log() {
+        log::set_max_level(log::LevelFilter::Debug)
+    }
+
     #[test]
     fn sshagent_list_identities() {
         init_log();
-        super::enable_debug_log();
+        enable_debug_log();
         let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
         let result = agent.list_identities();
         debug!("result={:?}", result);
@@ -211,7 +210,7 @@ mod tests {
     #[test]
     fn sshagent_auth() {
         init_log();
-        super::enable_debug_log();
+        enable_debug_log();
         let mut agent = AgentClient::new(env!("SSH_AUTH_SOCK"));
         let result = agent.list_identities();
         debug!("result={:?}", result);
@@ -250,7 +249,7 @@ mod tests {
     #[test]
     fn parse_user_authorized_keys() {
         init_log();
-        super::enable_debug_log();
+        enable_debug_log();
         let username = env!("USER");
         let result = super::auth_keys::parse_user_authorized_keys(&username);
         assert!(result.is_ok());
