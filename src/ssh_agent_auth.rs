@@ -31,7 +31,7 @@ impl<'a> AgentClient<'a> {
         debug!("read_message len={}", length);
         let mut buffer: Vec<u8> = vec![0; length as usize];
         stream.read_exact(buffer.as_mut_slice())?;
-        trace!("read {} bytes: {:?}", buffer.len(), buffer);
+        trace!("Read {} bytes: {:02X?}", buffer.len(), buffer);
         let msg: Message = from_bytes(buffer.as_slice())?;
         Ok(msg)
     }
@@ -39,7 +39,7 @@ impl<'a> AgentClient<'a> {
     fn write_message(stream: &mut Stream, msg: &Message) -> Result<(), ErrType> {
         let mut bytes = to_bytes(&to_bytes(msg)?)?;
         stream.write_all(&mut bytes)?;
-        trace!("written {} bytes: {:?}", bytes.len(), bytes);
+        trace!("Written {} bytes: {:02X?}", bytes.len(), bytes);
         Ok(())
     }
 
@@ -55,7 +55,7 @@ impl<'a> AgentClient<'a> {
             self.stream = None;
         }
         self.stream = Some(Stream::connect(&sockaddr)?);
-        info!("connected to {:?}", sockaddr);
+        info!("Connected to {:?}", sockaddr);
         Ok(())
     }
 
@@ -84,7 +84,7 @@ impl<'a> AgentClient<'a> {
         if let Message::IdentitiesAnswer(keys) = msg {
             let mut result = vec![];
             for item in keys {
-                debug!("list_identities: {:?} ({})", item.pubkey_blob, item.comment);
+                debug!("list_identities: {:02X?} ({})", item.pubkey_blob, item.comment);
                 if let Ok(pubkey) = from_bytes(&item.pubkey_blob) {
                     result.push(pubkey);
                 }
@@ -102,13 +102,13 @@ impl<'a> AgentClient<'a> {
             use openssl::bn::BigNum;
 
             let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
-            trace!("ECDSA signature: r={:?} s={:?}", data.r, data.s);
+            trace!("ECDSA signature: r={:02X?} s={:02X?}", data.r, data.s);
             let r = BigNum::from_slice(&data.r)?;
             let s = BigNum::from_slice(&data.s)?;
 
             Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
         } else {
-            trace!("signature: blob={:?}", sig.blob);
+            trace!("signature: blob={:02X?}", sig.blob);
             Ok(sig.blob)
         }
     }
