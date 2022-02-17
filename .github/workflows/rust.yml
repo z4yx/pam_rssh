@@ -13,16 +13,13 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
+    env:
+      SSH_AUTH_SOCK: /tmp/ssh-agent.sock
     steps:
     - name: Install Packages
       run: |
         sudo apt-get update
         sudo apt-get install libpam0g-dev libssl-dev
-    - name: Setup Test Env
-      run: |
-        ssh-agent -a /tmp/ssh-agent
-        export SSH_AUTH_SOCK=/tmp/ssh-agent
     - uses: actions/checkout@v2
       with:
         submodules: recursive
@@ -30,7 +27,16 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: |
+        ssh-agent -a $SSH_AUTH_SOCK
         ssh-keygen -t ecdsa -b 521 -f $HOME/.ssh/id_ecdsa521
+        ssh-keygen -t ecdsa -b 384 -f $HOME/.ssh/id_ecdsa384
+        ssh-keygen -t ecdsa -b 256 -f $HOME/.ssh/id_ecdsa256
+        ssh-keygen -t ed25519
+        ssh-keygen -t rsa
         ssh-add $HOME/.ssh/id_ecdsa521
+        ssh-add $HOME/.ssh/id_ecdsa384
+        ssh-add $HOME/.ssh/id_ecdsa256
+        ssh-add $HOME/.ssh/id_ed25519
+        ssh-add $HOME/.ssh/id_rsa
         
         cargo test --verbose
