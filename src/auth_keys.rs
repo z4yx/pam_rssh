@@ -20,6 +20,7 @@ fn parse_pubkey_fields(line: &str) -> Result<PublicKey, ErrType> {
             return Ok(key);
         }
     }
+    debug!("failed to parse pubkey line `{}`", line);
     return Err(RsshErr::ParsePubkeyErr.into_ptr());
 }
 
@@ -52,7 +53,7 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
     let mut res: Vec<PublicKey> = vec![];
     while let Some(line) = lines.next() {
         let trimed = line.trim_start();
-        if trimed.starts_with("#") {
+        if trimed.is_empty() || trimed.starts_with("#") {
             continue;
         }
         if let Ok(pubkey) = parse_pubkey_fields(trimed) {
@@ -61,7 +62,10 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
         }
         // If there are options before public key, skip them
         let skipped = skip_options(trimed);
-        res.push(skipped.and_then(|s| parse_pubkey_fields(s.trim_start()))?);
+        debug!("pubkey line after options skipped: {:?}", skipped);
+        if let Ok(pubkey) = skipped.and_then(|s| parse_pubkey_fields(s.trim_start())) {
+            res.push(pubkey);
+        }
     }
     Ok(res)
 }
