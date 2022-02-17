@@ -31,8 +31,8 @@ jobs:
         ssh-keygen -t ecdsa -b 521 -f $HOME/.ssh/id_ecdsa521
         ssh-keygen -t ecdsa -b 384 -f $HOME/.ssh/id_ecdsa384
         ssh-keygen -t ecdsa -b 256 -f $HOME/.ssh/id_ecdsa256
-        ssh-keygen -t ed25519
-        ssh-keygen -t rsa
+        ssh-keygen -t ed25519 -f $HOME/.ssh/id_ed25519
+        ssh-keygen -t rsa -f $HOME/.ssh/id_rsa
         ssh-add $HOME/.ssh/id_ecdsa521
         ssh-add $HOME/.ssh/id_ecdsa384
         ssh-add $HOME/.ssh/id_ecdsa256
