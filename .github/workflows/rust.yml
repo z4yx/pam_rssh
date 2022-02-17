@@ -24,6 +24,8 @@ jobs:
         ssh-agent -a /tmp/ssh-agent
         export SSH_AUTH_SOCK=/tmp/ssh-agent
     - uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Build
       run: cargo build --verbose
     - name: Run tests
