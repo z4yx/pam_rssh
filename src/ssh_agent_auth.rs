@@ -1,10 +1,10 @@
 use byteorder::{BigEndian, ReadBytesExt};
+use log::*;
 use multisock::{SocketAddr, Stream};
 use ssh_agent::proto;
 use ssh_agent::proto::public_key::PublicKey;
 use ssh_agent::proto::signature;
 use ssh_agent::proto::{from_bytes, to_bytes, Message};
-use log::*;
 
 use std::io::{Read, Write};
 // use std::mem::size_of;
@@ -84,7 +84,10 @@ impl<'a> AgentClient<'a> {
         if let Message::IdentitiesAnswer(keys) = msg {
             let mut result = vec![];
             for item in keys {
-                debug!("list_identities: {:02X?} ({})", item.pubkey_blob, item.comment);
+                debug!(
+                    "list_identities: {:02X?} ({})",
+                    item.pubkey_blob, item.comment
+                );
                 if let Ok(pubkey) = from_bytes(&item.pubkey_blob) {
                     result.push(pubkey);
                 }
@@ -95,21 +98,47 @@ impl<'a> AgentClient<'a> {
         }
     }
 
-    fn decode_signature_blob(blob: &[u8], is_ecdsa: bool) -> Result<Vec<u8>, ErrType> {
-        let sig: proto::Signature = from_bytes(&blob)?;
-        if is_ecdsa {
-            use openssl::ecdsa::EcdsaSig;
-            use openssl::bn::BigNum;
-
-            let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
-            trace!("ECDSA signature: r={:02X?} s={:02X?}", data.r, data.s);
-            let r = BigNum::from_slice(&data.r)?;
-            let s = BigNum::from_slice(&data.s)?;
-
-            Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
+    fn build_asn1_integer(bn: &[u8]) -> Vec<u8> {
+        let mut header = if bn[0] & 0x80 == 0 {
+            vec![0x02, bn.len() as u8]
         } else {
-            trace!("signature: blob={:02X?}", sig.blob);
-            Ok(sig.blob)
+            vec![0x02, (bn.len() + 1) as u8, 0]
+        };
+        header.extend_from_slice(bn);
+        header
+    }
+
+    fn decode_signature_blob(blob: &[u8], pubkey: &PublicKey) -> Result<Vec<u8>, ErrType> {
+        let sig: proto::Signature = from_bytes(&blob)?;
+        match pubkey {
+            PublicKey::EcDsa(_) => {
+                use openssl::bn::BigNum;
+                use openssl::ecdsa::EcdsaSig;
+
+                let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
+                trace!("ECDSA signature: r={:02X?} s={:02X?}", data.r, data.s);
+                let r = BigNum::from_slice(&data.r)?;
+                let s = BigNum::from_slice(&data.s)?;
+
+                Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
+            }
+            PublicKey::Dss(_) => {
+                if sig.blob.len() != 40 {
+                    return Err(RsshErr::InvalidSigErr.into_ptr());
+                }
+                trace!("DSA signature: r={:02X?} s={:02X?}", &sig.blob[..20], &sig.blob[20..]);
+                // Blob to ASN.1 SEQUENCE(INTEGER,INTEGER)
+                let mut r = Self::build_asn1_integer(&sig.blob[..20]);
+                let mut s = Self::build_asn1_integer(&sig.blob[20..]);
+                let mut seq = vec![0x30, (r.len() + s.len()) as u8];
+                seq.append(&mut r);
+                seq.append(&mut s);
+                Ok(seq)
+            }
+            _ => {
+                trace!("signature: blob={:02X?}", sig.blob);
+                Ok(sig.blob)
+            }
         }
     }
 
@@ -119,10 +148,8 @@ impl<'a> AgentClient<'a> {
         pubkey: &'b PublicKey,
     ) -> Result<Vec<u8>, ErrType> {
         let mut flags = 0u32;
-        let mut is_ecdsa = false;
         match pubkey {
             PublicKey::Rsa(_) => flags = signature::RSA_SHA2_256,
-            PublicKey::EcDsa(_) => is_ecdsa = true,
             _ => {}
         }
         let args = proto::SignRequest {
@@ -136,7 +163,7 @@ impl<'a> AgentClient<'a> {
         }
         if let Message::SignResponse(val) = msg {
             // println!("signature payload: {:?}", val);
-            Ok(Self::decode_signature_blob(&val, is_ecdsa)?)
+            Ok(Self::decode_signature_blob(&val, pubkey)?)
         } else {
             Err(RsshErr::InvalidRspErr.into_ptr())
         }

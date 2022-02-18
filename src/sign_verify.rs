@@ -48,6 +48,17 @@ impl ToOpensslKey for PublicKey {
                 let rsa = Rsa::from_public_components(n, e)?;
                 Ok((PKey::from_rsa(rsa)?, Some(MessageDigest::sha256())))
             }
+            PublicKey::Dss(input) => {
+                debug!("    DSA key");
+                use openssl::bn::BigNum;
+                use openssl::dsa::Dsa;
+                let p = BigNum::from_slice(&input.p)?;
+                let q = BigNum::from_slice(&input.q)?;
+                let g = BigNum::from_slice(&input.g)?;
+                let y = BigNum::from_slice(&input.y)?;
+                let dsa = Dsa::from_public_components(p, q, g, y)?;
+                Ok((PKey::from_dsa(dsa)?, Some(MessageDigest::sha1())))
+            }
             _ => Err(RsshErr::ParsePubkeyErr.into_ptr()),
         }
     }
@@ -74,4 +85,33 @@ pub fn gen_challenge() -> Result<Vec<u8>, ErrType> {
     let buf_ref = buffer.as_mut_slice();
     openssl::rand::rand_bytes(buf_ref)?;
     Ok(buffer)
+}
+
+#[test]
+fn test_dsa_sign_verify() {
+    use openssl::sign::{Signer, Verifier};
+    use openssl::dsa::Dsa;  
+    use openssl::pkey::PKey;
+    use openssl::hash::MessageDigest;
+
+    // Generate a keypair
+    let keypair = Dsa::generate(1024).unwrap();
+    let keypair = PKey::from_dsa(keypair).unwrap();
+
+    let data = b"hello, world!";
+    let data2 = b"hola, mundo!";
+
+    // Sign the data
+    let mut signer = Signer::new(MessageDigest::sha1(), &keypair).unwrap();
+    signer.update(data).unwrap();
+    signer.update(data2).unwrap();
+    let signature = signer.sign_to_vec().unwrap();
+
+    println!("signature={} len={}", base64::encode(&signature), signature.len());
+
+    // Verify the data
+    let mut verifier = Verifier::new(MessageDigest::sha1(), &keypair).unwrap();
+    verifier.update(data).unwrap();
+    verifier.update(data2).unwrap();
+    assert!(verifier.verify(&signature).unwrap());
 }
