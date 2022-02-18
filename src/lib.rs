@@ -183,9 +183,8 @@ mod tests {
     use log::debug;
 
     fn init_log() {
-        log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
-            .map(|()| log::set_max_level(log::LevelFilter::Info))
-            .unwrap();
+        let _ = log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
+            .map(|()| log::set_max_level(log::LevelFilter::Info));
     }
 
     fn enable_debug_log() {
