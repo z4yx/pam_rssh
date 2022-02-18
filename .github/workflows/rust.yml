@@ -33,10 +33,13 @@ jobs:
         ssh-keygen -t ecdsa -b 256 -f $HOME/.ssh/id_ecdsa256
         ssh-keygen -t ed25519 -f $HOME/.ssh/id_ed25519
         ssh-keygen -t rsa -f $HOME/.ssh/id_rsa
+        ssh-keygen -t dsa -f $HOME/.ssh/id_dsa
         ssh-add $HOME/.ssh/id_ecdsa521
         ssh-add $HOME/.ssh/id_ecdsa384
         ssh-add $HOME/.ssh/id_ecdsa256
         ssh-add $HOME/.ssh/id_ed25519
         ssh-add $HOME/.ssh/id_rsa
+        ssh-add $HOME/.ssh/id_dsa
+        cp $HOME/.ssh/id_rsa.pub $HOME/.ssh/authorized_keys
         
         cargo test --verbose

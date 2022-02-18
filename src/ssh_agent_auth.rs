@@ -98,7 +98,11 @@ impl<'a> AgentClient<'a> {
         }
     }
 
-    fn build_asn1_integer(bn: &[u8]) -> Vec<u8> {
+    fn build_asn1_integer(input: &[u8]) -> Vec<u8> {
+        let mut bn = input;
+        while bn.len() > 1 && bn[0] == 0 {
+            bn = &bn[1..];
+        }
         let mut header = if bn[0] & 0x80 == 0 {
             vec![0x02, bn.len() as u8]
         } else {
@@ -126,7 +130,11 @@ impl<'a> AgentClient<'a> {
                 if sig.blob.len() != 40 {
                     return Err(RsshErr::InvalidSigErr.into_ptr());
                 }
-                trace!("DSA signature: r={:02X?} s={:02X?}", &sig.blob[..20], &sig.blob[20..]);
+                trace!(
+                    "DSA signature: r={:02X?} s={:02X?}",
+                    &sig.blob[..20],
+                    &sig.blob[20..]
+                );
                 // Blob to ASN.1 SEQUENCE(INTEGER,INTEGER)
                 let mut r = Self::build_asn1_integer(&sig.blob[..20]);
                 let mut s = Self::build_asn1_integer(&sig.blob[20..]);
