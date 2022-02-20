@@ -98,58 +98,6 @@ impl<'a> AgentClient<'a> {
         }
     }
 
-    fn build_asn1_integer(input: &[u8]) -> Vec<u8> {
-        let mut bn = input;
-        while bn.len() > 1 && bn[0] == 0 {
-            bn = &bn[1..];
-        }
-        let mut header = if bn[0] & 0x80 == 0 {
-            vec![0x02, bn.len() as u8]
-        } else {
-            vec![0x02, (bn.len() + 1) as u8, 0]
-        };
-        header.extend_from_slice(bn);
-        header
-    }
-
-    fn decode_signature_blob(blob: &[u8], pubkey: &PublicKey) -> Result<Vec<u8>, ErrType> {
-        let sig: proto::Signature = from_bytes(&blob)?;
-        match pubkey {
-            PublicKey::EcDsa(_) => {
-                use openssl::bn::BigNum;
-                use openssl::ecdsa::EcdsaSig;
-
-                let data: proto::EcDsaSignatureData = from_bytes(&sig.blob)?;
-                trace!("ECDSA signature: r={:02X?} s={:02X?}", data.r, data.s);
-                let r = BigNum::from_slice(&data.r)?;
-                let s = BigNum::from_slice(&data.s)?;
-
-                Ok(EcdsaSig::from_private_components(r, s)?.to_der()?)
-            }
-            PublicKey::Dss(_) => {
-                if sig.blob.len() != 40 {
-                    return Err(RsshErr::InvalidSigErr.into_ptr());
-                }
-                trace!(
-                    "DSA signature: r={:02X?} s={:02X?}",
-                    &sig.blob[..20],
-                    &sig.blob[20..]
-                );
-                // Blob to ASN.1 SEQUENCE(INTEGER,INTEGER)
-                let mut r = Self::build_asn1_integer(&sig.blob[..20]);
-                let mut s = Self::build_asn1_integer(&sig.blob[20..]);
-                let mut seq = vec![0x30, (r.len() + s.len()) as u8];
-                seq.append(&mut r);
-                seq.append(&mut s);
-                Ok(seq)
-            }
-            _ => {
-                trace!("signature: blob={:02X?}", sig.blob);
-                Ok(sig.blob)
-            }
-        }
-    }
-
     pub fn sign_data<'b>(
         &mut self,
         data: &'b [u8],
@@ -171,7 +119,10 @@ impl<'a> AgentClient<'a> {
         }
         if let Message::SignResponse(val) = msg {
             // println!("signature payload: {:?}", val);
-            Ok(Self::decode_signature_blob(&val, pubkey)?)
+            // if let Ok(mut file) = std::fs::File::create("sign.bin") {
+            //     file.write_all(&val);
+            // }
+            Ok(val)
         } else {
             Err(RsshErr::InvalidRspErr.into_ptr())
         }

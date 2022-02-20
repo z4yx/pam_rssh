@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "pam_rssh"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64",
  "byteorder",
@@ -198,8 +198,6 @@ dependencies = [
 [[package]]
 name = "ssh-agent"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b43cbac10685c313df69148165214d3b4769b6615209ca38e28f59774a65be3f"
 dependencies = [
  "byteorder",
  "futures",

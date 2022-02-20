@@ -1,5 +1,7 @@
 # PAM-RSSH
 
+[![Rust](https://github.com/z4yx/pam_rssh/actions/workflows/rust.yml/badge.svg)](https://github.com/z4yx/pam_rssh/actions/workflows/rust.yml)
+
 This PAM module provides ssh-agent based authentication. The primary design goal is to avoid typing password when you `sudo` on remote servers. Instead, you can simply touch your hardware security key (e.g. Yubikey/Canokey) to fulfill user verification. The process is done by forwarding the remote authentication request to client-side ssh-agent as a signature request.
 
 This project is developed in Rust language to minimize security flaws.
@@ -10,11 +12,11 @@ It's a preliminary version now. Test and feedback are needed.
 
 Currently supported SSH public key types:
 - RSA (with SHA256 digest)
+- DSA
 - ECDSA 256/384/521
+- ECDSA-SK (FIDO2/U2F)
 - ED25519
-
-Under development:
-- FIDO2 (ed25519-sk/ecdsa-sk)
+- ED25519-SK (FIDO2)
 
 ## Build and Install
 

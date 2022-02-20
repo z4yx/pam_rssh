@@ -1,3 +1,6 @@
 [submodule "dep/pam-rs"]
 	path = dep/pam-rs
 	url = https://github.com/z4yx/pam-rs.git
+[submodule "dep/ssh-agent.rs"]
+	path = dep/ssh-agent.rs
+	url = git@github.com:z4yx/ssh-agent.rs.git
