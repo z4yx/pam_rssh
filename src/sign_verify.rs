@@ -5,7 +5,7 @@ use openssl::nid::Nid;
 use openssl::pkey::{PKey, Public};
 use ssh_agent::proto;
 use ssh_agent::proto::public_key::PublicKey;
-use ssh_agent::proto::{from_bytes, to_bytes, Message};
+use ssh_agent::proto::from_bytes;
 
 use super::error::RsshErr;
 
@@ -19,7 +19,7 @@ impl ToOpensslKey for PublicKey {
     type OpensslKeyResult = Result<(PKey<Public>, Option<MessageDigest>), ErrType>;
 
     fn to_pkey(&self) -> Self::OpensslKeyResult {
-        let parseECDSA = |identifier: &String, q: &Vec<u8>| -> Self::OpensslKeyResult {
+        let parse_ecdsa = |identifier: &String, q: &Vec<u8>| -> Self::OpensslKeyResult {
             let (nid, digest) = match identifier.as_str() {
                 "nistp256" => (Nid::X9_62_PRIME256V1, Some(MessageDigest::sha256())),
                 "nistp384" => (Nid::SECP384R1, Some(MessageDigest::sha384())),
@@ -38,11 +38,11 @@ impl ToOpensslKey for PublicKey {
         match self {
             PublicKey::EcDsa(input) => {
                 debug!("    ECDSA key identifier={}", input.identifier);
-                parseECDSA(&input.identifier, &input.q)
+                parse_ecdsa(&input.identifier, &input.q)
             }
             PublicKey::SkEcDsa(input) => {
                 debug!("    ECDSA security key identifier={}", input.identifier);
-                parseECDSA(&input.identifier, &input.q)
+                parse_ecdsa(&input.identifier, &input.q)
             }
             PublicKey::Ed25519(input) => {
                 debug!("    ED25519 key");
@@ -78,7 +78,6 @@ impl ToOpensslKey for PublicKey {
                 let dsa = Dsa::from_public_components(p, q, g, y)?;
                 Ok((PKey::from_dsa(dsa)?, Some(MessageDigest::sha1())))
             }
-            _ => Err(RsshErr::ParsePubkeyErr.into_ptr()),
         }
     }
 }
