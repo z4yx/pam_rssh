@@ -74,10 +74,11 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
 pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
     let mut prefix = format!("/home/{}",username);
     // Gets user's $HOME to search for authorized_keys
-    let pwd = Passwd::from_name(username).unwrap();
-    if let Some(passwd) = pwd {
-        prefix = passwd.dir;
-    }
+    let _ = Passwd::from_name(username).map(|opt_passwd| {
+        opt_passwd.map(|passwd| {
+            prefix = passwd.dir;
+        })
+    });
     let path: PathBuf = [prefix.as_str(), ".ssh", "authorized_keys"]
         .iter()
         .collect();
