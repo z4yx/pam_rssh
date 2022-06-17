@@ -1,4 +1,5 @@
 use log::*;
+use pwd::Passwd;
 use ssh_agent::proto::from_bytes;
 use ssh_agent::proto::public_key::PublicKey;
 
@@ -71,7 +72,14 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
 }
 
 pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
-    let path: PathBuf = ["/home", username, ".ssh", "authorized_keys"]
+    let mut prefix = format!("/home/{}",username);
+    // Gets user's $HOME to search for authorized_keys
+    let _ = Passwd::from_name(username).map(|opt_passwd| {
+        opt_passwd.map(|passwd| {
+            prefix = passwd.dir;
+        })
+    });
+    let path: PathBuf = [prefix.as_str(), ".ssh", "authorized_keys"]
         .iter()
         .collect();
     parse_authorized_keys(path.to_str().ok_or(RsshErr::GetHomeErr)?)

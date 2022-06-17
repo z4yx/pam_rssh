@@ -56,6 +56,6 @@ The following arguments are supported:
 - `loglevel=<off|error|warn|info|debug|trace>` Select the level of messages logged to syslog. Defaults to `warn`.
 - `debug` Equivalent to `loglevel=debug`. 
 - `ssh_agent_addr=<IP:port or UNIX domain address>` The address of ssh-agent. Defaults to the value of `SSH_AUTH_SOCK` environment variable, which is set by ssh automatically.
-- `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `/home/<username>/.ssh/authorized_keys`.
+- `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `$HOME/.ssh/authorized_keys`. Usually `$HOME` expands to `/home/<username>`.
 
 Arguments should be appended to the PAM rule. For example, `auth sufficient /usr/local/lib/libpam_rssh.so debug`.
