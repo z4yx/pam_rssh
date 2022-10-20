@@ -26,6 +26,15 @@ Prerequisites:
 - libpam
 - Rust (with Cargo)
 
+Clone this repo and **two submodules**.
+
+```
+git clone --recurse-submodule https://github.com/z4yx/pam_rssh.git
+cd pam_rssh
+```
+
+Then build it using Cargo.
+
 ```
 cargo build --release
 cp target/release/libpam_rssh.so /usr/local/lib/
