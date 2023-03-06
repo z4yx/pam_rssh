@@ -73,7 +73,7 @@ fn setup_logger() {
 }
 
 impl PamHooks for PamRssh {
-    fn sm_authenticate(pamh: &PamHandle, args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+    fn sm_authenticate(pamh: &mut PamHandle, args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         /* if (flags & pam::constants::PAM_SILENT) == 0 */
         {
             setup_logger();
@@ -171,7 +171,7 @@ impl PamHooks for PamRssh {
     }
 
     // Always return PAM_SUCCESS for sm_setcred, just like pam-u2f
-    fn sm_setcred(_pamh: &PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+    fn sm_setcred(_pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         info!("set-credentials is not implemented");
         PamResultCode::PAM_SUCCESS
     }
