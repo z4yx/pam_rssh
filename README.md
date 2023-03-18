@@ -8,7 +8,7 @@ This project is developed in Rust language to minimize security flaws.
 
 ## Development Status
 
-It's a preliminary version now. Test and feedback are needed.
+It's ready for production use, and has been tested on production servers for over a year. More tests and feedback are welcome.
 
 Currently supported SSH public key types:
 - RSA (with SHA256 digest)
@@ -26,7 +26,7 @@ Prerequisites:
 - libpam
 - Rust (with Cargo)
 
-Clone this repo and **two submodules**.
+Clone this repo with **a submodule**.
 
 ```
 git clone --recurse-submodule https://github.com/z4yx/pam_rssh.git
