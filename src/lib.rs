@@ -63,7 +63,7 @@ fn setup_logger() {
         facility: Facility::LOG_AUTH,
         hostname: None,
         process: "pam_rssh".into(),
-        pid: std::process::id() as i32,
+        pid: std::process::id() as u32,
     };
     syslog::unix(formatter)
         .ok()

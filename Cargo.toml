@@ -17,5 +17,5 @@ base64 = "^0.13.0"
 openssl-sys = "^0.9"
 openssl = "^0.10"
 log = { version = "^0.4", features = ["std", "serde"] }
-syslog = "^5.0"
+syslog = "^6.0"
 pwd = "1"
