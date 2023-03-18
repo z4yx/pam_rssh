@@ -70,12 +70,6 @@ checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
 
 [[package]]
 name = "libc"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e32a70cf75e5846d53a673923498228bbec6a8624708a9ea5645f075d6276122"
-
-[[package]]
-name = "libc"
 version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
@@ -111,7 +105,7 @@ dependencies = [
  "bitflags",
  "cfg-if",
  "foreign-types",
- "libc 0.2.139",
+ "libc",
  "once_cell",
  "openssl-macros",
  "openssl-sys",
@@ -136,16 +130,18 @@ checksum = "23bbbf7854cd45b83958ebe919f0e8e516793727652e27fda10a8384cfc790b7"
 dependencies = [
  "autocfg",
  "cc",
- "libc 0.2.139",
+ "libc",
  "pkg-config",
  "vcpkg",
 ]
 
 [[package]]
-name = "pam"
-version = "0.1.0"
+name = "pam-bindings"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95c337e922acb6ab9c3ddd1016fed13957a5bf14f51b6caa293ddc8dd47660ca"
 dependencies = [
- "libc 0.1.12",
+ "libc",
 ]
 
 [[package]]
@@ -158,7 +154,7 @@ dependencies = [
  "multisock",
  "openssl",
  "openssl-sys",
- "pam",
+ "pam-bindings",
  "pwd",
  "ssh-agent",
  "syslog",
@@ -185,7 +181,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72c71c0c79b9701efe4e1e4b563b2016dd4ee789eb99badcb09d61ac4b92e4a2"
 dependencies = [
- "libc 0.2.139",
+ "libc",
  "thiserror",
 ]
 
@@ -246,7 +242,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a5d8ef1b679c07976f3ee336a436453760c470f54b5e7237556728b8589515d"
 dependencies = [
  "error-chain",
- "libc 0.2.139",
+ "libc",
  "log",
  "time",
 ]
@@ -277,7 +273,7 @@ version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
 dependencies = [
- "libc 0.2.139",
+ "libc",
  "wasi",
  "winapi",
 ]
