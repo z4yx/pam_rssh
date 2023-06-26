@@ -14,14 +14,15 @@ fn parse_pubkey_fields(line: &str) -> Result<PublicKey, ErrType> {
     let mut fields = line.split_whitespace();
     if let Some(algo) = fields.next() {
         if let Some(b64key) = fields.next() {
-            debug!("parse_authorized_keys: {} {}", algo, b64key);
-            let key = base64::decode(b64key)
+            let b64trimmed = b64key.trim_end();
+            debug!("parse_pubkey_fields: {} {}", algo, b64trimmed);
+            let key = base64::decode(b64trimmed)
                 .map_err(|_| RsshErr::ParsePubkeyErr)
                 .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::ParsePubkeyErr))?;
             return Ok(key);
         }
     }
-    debug!("failed to parse pubkey line `{}`", line);
+    warn!("At least two fields are required: `{}`", line);
     return Err(RsshErr::ParsePubkeyErr.into_ptr());
 }
 
@@ -63,9 +64,14 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
         }
         // If there are options before public key, skip them
         let skipped = skip_options(trimed);
+        if let Err(e) = skipped {
+            debug!("skip_options() returns: {}", e.as_ref());
+            continue;
+        }
         debug!("pubkey line after options skipped: {:?}", skipped);
-        if let Ok(pubkey) = skipped.and_then(|s| parse_pubkey_fields(s.trim_start())) {
-            res.push(pubkey);
+        match skipped.and_then(|s| parse_pubkey_fields(s.trim_start())) {
+            Ok(pubkey) => res.push(pubkey),
+            Err(e) => debug!("parse_pubkey_fields() returns: {}", e.as_ref())
         }
     }
     Ok(res)
@@ -104,13 +110,28 @@ fn test_skip_options() {
 
 #[test]
 fn test_parse_authorized_keys() {
-    let content = concat!(
+    let _ = log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
+        .map(|()| log::set_max_level(log::LevelFilter::Debug));
+    let mut content = concat!(
+        "ssh-ed25519  InvalidBase64\n",
+        "ssh-ed25519  AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV   \n",
         "  some_opt   ssh-ed25519  AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV my key\n",
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV\tmy key\n",
         " ssh-ed25519\tAAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV\tmy key\n",
-        "  #ssh-ed25519\tAAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV\tmy key",
+        "  #ssh-ed25519\tAAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV\tmy key\n",
+        "#comment\n",
     );
     let path = "/tmp/pam_rssh.test";
     fs::write(path, content).unwrap();
-    assert_eq!(parse_authorized_keys(path).unwrap().len(), 3);
+    assert_eq!(parse_authorized_keys(path).unwrap().len(), 4);
+
+    content = concat!(
+        "sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBOs1kRdss9EmY9MPMA/e5HC10mtxnkXbU6wSdlIMugAweQc7ckFPvY+y1F86Z2eR4X42Qo/85bMDjlM/2BAJqbYAAAAEc3NoOg== test@n\n",
+        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBRogHNAvK4P9f8EKulnxrF8SfKIdqNrIleHdj0wvAU5AAAADXNzaDpUb3VjaE9ubHk=    \n",
+        "ssh-rsa              AAAAB3NzaC1yc2EAAAADAQABAAABgQCx3nZIDXpjn68tl0McPq8WCoTio1iVaAlAE7NnQRn9js8+T/dhiE1s4T7qMqf3iSNDzfq/qY8paAWips5z8t/Soy2x5xTcSWBX2zoCcM1H4R/jYcnfUTvfsTfjCVkUiQxX3wkyThe5biU/NjrB92NbQH6ZFf53SjXL6ax/9Q1e5938uKQnE+bBBHDBPBixRQzGT6NbTiegjDf6tyQaKNzPhATTlAqDaQzUIVHvoVPuJ2hT7OiDr72wwdrnIkobKtykbrGITobd4XujhIMje024gqlTucWUzA91m2LgBx4pfOzYlVUZcXorVAL0wpTPN4ursiEEtU/kYZN5xUDX1anp0GeNK74SBvUfq8mm9nx7evPMEH9Cdl3SFa9oQsqOSOHJNICW6svfaDweGTsI51KJptSuF1jq/V9VlLZmIOFezPEXiM13Q6ZqAigzPBggzNI4KgtSzztFnEKwvV1RO/GfaMn5xp2Cdovpfb0FhIsZ7i6wTXCk4ZqfvUDuKRoDE+k=\n",
+        "ecdsa-sha2-nistp256  AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBF279yp1qnjADnYs+muktz26HuNwznkDf6vQT6WKJ42GwD4GHhFLCj2CIL26qkroEynLAqt19XUMBnb/JGPCThw=    test\n",
+        "ssh-dss AAAAB3NzaC1kc3MAAACBAOPA1udikQuPhCemarDkDj5ZIinN3quZty5Y0/APTdhOVQ8Ad5aJ7Bz0cCNzjeaTYrZh92nT8PJzIFnn/bT0sPcao8ApLu3OgeYdXx9tofw53o5bcUEkcVaKiSgVTYXIYTJmDFTTgTaQWNAjag+zcfZGRXVyuHfhOLYzIUuJEZmjAAAAFQDq6w2ThuInZSY3FEAynryDfNjAuwAAAIALvNCORC5qigYfNpqJ68P21GDQ3II9FeOa3zo4vV2h0htJb9OY8MpUEAMFyOuhtJ97OvbjjTBQY6WLycOwoJnsf8wZcVJFR5/R0DrVzil9sPLduAVkzrHGbH0ESAxWsymlLDWYywycCtCEFEGouyBNgsgzMgRycDPH2akQeX+vGAAAAIEAurSBK5tyWFvdGQUlhPQwmGnT4iGaYsElDLjRSFe4qNFJ1vJ+m8FEaoNudR0JLx/AtlyP2GNdDddnsxNvusr2x+uXzyc5PRKhZ82xSlGDSkrPPxDl4s24KE3c6jY8Lu5JZ/dEjjW2SsydY3nrlY12toLCtFAMMojcf0pNQMqnh6s= \n",
+    );
+    fs::write(path, content).unwrap();
+    assert_eq!(parse_authorized_keys(path).unwrap().len(), 5);
 }
