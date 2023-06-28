@@ -82,6 +82,9 @@ impl<'a> AgentClient<'a> {
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>, ErrType> {
         let msg = self.call_agent(&Message::RequestIdentities, NET_RETRY_CNT)?;
         if let Message::IdentitiesAnswer(keys) = msg {
+            if keys.len() == 0 {
+                info!("Please add keys to ssh-agent")
+            }
             let mut result = vec![];
             for item in keys {
                 debug!(

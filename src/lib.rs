@@ -10,6 +10,7 @@ mod ssh_agent_auth;
 use log::*;
 use pam::constants::{PamFlag, PamResultCode};
 use pam::module::{PamHandle, PamHooks};
+use ssh_agent::proto::KeyTypeEnum;
 use ssh_agent::proto::public_key::PublicKey;
 use syslog::{BasicLogger, Facility, Formatter3164};
 
@@ -142,10 +143,10 @@ impl PamHooks for PamRssh {
             debug!("SSH-Agent reports {} keys", client_keys.len());
             for (i, key) in client_keys.iter().enumerate() {
                 if !is_key_authorized(&key, &authorized_keys) {
-                    debug!("Key {} is not authorized", i);
+                    debug!("Key[{}] {} is not authorized", i, key.key_type());
                     continue;
                 }
-                debug!("Key {} is authorized", i);
+                debug!("Key[{}] is authorized", i);
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
                         info!("Successful authentication");
