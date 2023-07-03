@@ -182,7 +182,7 @@ fn test_run_authorized_keys_cmd() {
     let _ = log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
         .map(|()| log::set_max_level(log::LevelFilter::Debug));
     // let whoami = Passwd::current_user().unwrap().name;
-    let test_user = String::from("sshd");
+    let test_user = String::from("nobody");
 
     let mut ret = run_authorized_keys_cmd("/bin/non-exist", "root", "root");
     assert!(ret.is_err());
