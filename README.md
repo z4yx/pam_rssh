@@ -58,7 +58,7 @@ Start a ssh-agent on your client, then add your keys with `ssh-add`.
 
 Try to ssh to your server with forwarded agent (-A option), and make a `sudo` there. 
 
-## Arguments
+## Optional Arguments
 
 The following arguments are supported:
 
@@ -66,5 +66,11 @@ The following arguments are supported:
 - `debug` Equivalent to `loglevel=debug`. 
 - `ssh_agent_addr=<IP:port or UNIX domain address>` The address of ssh-agent. Defaults to the value of `SSH_AUTH_SOCK` environment variable, which is set by ssh automatically.
 - `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `$HOME/.ssh/authorized_keys`. Usually `$HOME` expands to `/home/<username>`.
+- `authorized_keys_command=<Path to command>` A command to generate the authorized_keys. It takes a single argument, the username of the user being authenticated. The standard output of this command will be parsed as authorized_keys. The `auth_key_file` will be ignored if you specify this argument.
+- `authorized_keys_command_user=<Username>` The `authorized_keys_command` will be run as the user specified here. If this argument is omitted, the `authorized_keys_command` will be run as the user being authenticated.
 
-Arguments should be appended to the PAM rule. For example, `auth sufficient /usr/local/lib/libpam_rssh.so debug`.
+Arguments should be appended to the PAM rule. For example:
+
+```
+auth sufficient /usr/local/lib/libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
+```
