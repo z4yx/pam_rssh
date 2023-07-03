@@ -46,13 +46,11 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
 }
 
 fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_as_user: &str) -> Result<Vec<PublicKey>, ErrType> {
-    let user = if run_as_user.is_empty() {
-        pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?
-    } else {
-        run_as_user.to_string()
-    };
-    debug!("Run command `{}` as user `{}`", auth_key_cmd, &user);
-    let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd, &user)?;
+    let auth_user = pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?;
+    debug!("Run command `{}` as user `{}`", auth_key_cmd, run_as_user);
+    let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd, 
+        auth_user.as_str(),
+        if run_as_user.is_empty() { auth_user.as_str() } else { run_as_user })?;
     auth_keys::parse_content_of_authorized_keys(&content)
 }
 

@@ -98,13 +98,13 @@ pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrT
     parse_authorized_keys(path.to_str().ok_or(RsshErr::GetHomeErr)?)
 }
 
-pub fn run_authorized_keys_cmd(auth_key_cmd: &str, username: &String) -> Result<String, ErrType> {
+pub fn run_authorized_keys_cmd(auth_key_cmd: &str, auth_user: &str, run_user: &str) -> Result<String, ErrType> {
     let uid;
-    let opt_p = Passwd::from_name(username.as_str())?;
+    let opt_p = Passwd::from_name(run_user)?;
     if let Some(p) = opt_p {
         uid = p.uid;
     } else {
-        warn!("Failed to get the uid of `{}`", username);
+        warn!("Failed to get the uid of `{}`", run_user);
         return Err(RsshErr::GetUidErr.into_ptr());
     };
     let euid: u32;
@@ -115,9 +115,9 @@ pub fn run_authorized_keys_cmd(auth_key_cmd: &str, username: &String) -> Result<
     let cmd_with_arg;
     if euid == 0 { // current user is root, setuid() is allowed
         debug!("Current user is root, set uid to {}", uid);
-        cmd_with_arg = cmd.arg(username).uid(uid);
+        cmd_with_arg = cmd.arg(auth_user).uid(uid);
     } else {
-        cmd_with_arg = cmd.arg(username);
+        cmd_with_arg = cmd.arg(auth_user);
     }
     let result = cmd_with_arg.output()?;
     let status = result.status;
@@ -184,25 +184,25 @@ fn test_run_authorized_keys_cmd() {
     // let whoami = Passwd::current_user().unwrap().name;
     let test_user = String::from("sshd");
 
-    let mut ret = run_authorized_keys_cmd("/bin/non-exist", &"root".into());
+    let mut ret = run_authorized_keys_cmd("/bin/non-exist", "root", "root");
     assert!(ret.is_err());
     info!("err message: {}", ret.unwrap_err());
 
-    ret = run_authorized_keys_cmd("/bin/echo", &"root".to_string());
+    ret = run_authorized_keys_cmd("/bin/echo", "sb", "root");
     assert!(ret.is_ok());
-    assert_eq!(ret.unwrap(), "root\n");
+    assert_eq!(ret.unwrap(), "sb\n");
 
-    ret = run_authorized_keys_cmd("/bin/echo", &test_user);
+    ret = run_authorized_keys_cmd("/bin/echo", test_user.as_str(), test_user.as_str());
     assert!(ret.is_ok());
     assert_eq!(ret.unwrap(), test_user.clone() + "\n");
 
-    ret = run_authorized_keys_cmd("/bin/echo", &"no_such_user".into());
+    ret = run_authorized_keys_cmd("/bin/echo", "sb", "no_such_user");
     assert!(ret.is_err());
     let mut err = ret.unwrap_err();
     info!("err message: {}", err);
     assert!(matches!(err.downcast::<RsshErr>().unwrap().as_ref(), RsshErr::GetUidErr));
 
-    ret = run_authorized_keys_cmd("/bin/false", &test_user);
+    ret = run_authorized_keys_cmd("/bin/false", "sb", test_user.as_str());
     assert!(ret.is_err());
     err = ret.unwrap_err();
     info!("err message: {}", err);
