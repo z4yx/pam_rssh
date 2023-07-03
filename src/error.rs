@@ -13,6 +13,9 @@ pub enum RsshErr {
     InvalidRspErr,
     GetUserErr,
     GetHomeErr,
+    GetUidErr,
+    CmdExitErr(Option<i32>),
+    CmdOutputDecodeErr,
 }
 
 impl RsshErr {
@@ -39,6 +42,9 @@ impl Display for RsshErr {
             RsshErr::InvalidRspErr => S!("Invalid type of response"),
             RsshErr::GetUserErr => S!("Failed to get user name"),
             RsshErr::GetHomeErr => S!("Cannot get user's home directory"),
+            RsshErr::GetUidErr => S!("Cannot get uid of specified user"),
+            RsshErr::CmdExitErr(code) => format!("Command exit code is {}", code.unwrap_or(-1)),
+            RsshErr::CmdOutputDecodeErr => S!("Failed to decode the output of command"),
         };
         f.write_str(&msg)
     }

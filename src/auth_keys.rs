@@ -1,10 +1,13 @@
 use log::*;
+use openssl_sys::geteuid;
 use pwd::Passwd;
 use ssh_agent::proto::from_bytes;
 use ssh_agent::proto::public_key::PublicKey;
 
 use std::fs;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
+use std::process::Command;
 
 use super::error::RsshErr;
 
@@ -48,9 +51,7 @@ fn skip_options(line: &str) -> Result<String, ErrType> {
     }
 }
 
-pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> {
-    let content =
-        fs::read_to_string(filename).map_err(|_| RsshErr::FileReadErr(filename.to_string()))?;
+pub fn parse_content_of_authorized_keys(content: &String) -> Result<Vec<PublicKey>, ErrType> {
     let mut lines = content.lines();
     let mut res: Vec<PublicKey> = vec![];
     while let Some(line) = lines.next() {
@@ -77,6 +78,12 @@ pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> 
     Ok(res)
 }
 
+pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> {
+    let content =
+        fs::read_to_string(filename).map_err(|_| RsshErr::FileReadErr(filename.to_string()))?;
+    parse_content_of_authorized_keys(&content)
+}
+
 pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
     let mut prefix = format!("/home/{}",username);
     // Gets user's $HOME to search for authorized_keys
@@ -89,6 +96,40 @@ pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrT
         .iter()
         .collect();
     parse_authorized_keys(path.to_str().ok_or(RsshErr::GetHomeErr)?)
+}
+
+pub fn run_authorized_keys_cmd(auth_key_cmd: &str, username: &String) -> Result<String, ErrType> {
+    let uid;
+    let opt_p = Passwd::from_name(username.as_str())?;
+    if let Some(p) = opt_p {
+        uid = p.uid;
+    } else {
+        warn!("Failed to get the uid of `{}`", username);
+        return Err(RsshErr::GetUidErr.into_ptr());
+    };
+    let euid: u32;
+    unsafe {
+        euid = geteuid();
+    }
+    let mut cmd = Command::new(auth_key_cmd);
+    let cmd_with_arg;
+    if euid == 0 { // current user is root, setuid() is allowed
+        debug!("Current user is root, set uid to {}", uid);
+        cmd_with_arg = cmd.arg(username).uid(uid);
+    } else {
+        cmd_with_arg = cmd.arg(username);
+    }
+    let result = cmd_with_arg.output()?;
+    let status = result.status;
+    if !status.success() {
+        return Err(RsshErr::CmdExitErr(status.code()).into_ptr())
+    }
+    if let Ok(t) = String::from_utf8(result.stdout) {
+        debug!("Got authorized keys from command output, len={}", t.len());
+        Ok(t)
+    } else {
+        Err(RsshErr::CmdOutputDecodeErr.into_ptr())
+    }
 }
 
 #[test]
@@ -134,4 +175,37 @@ fn test_parse_authorized_keys() {
     );
     fs::write(path, content).unwrap();
     assert_eq!(parse_authorized_keys(path).unwrap().len(), 5);
+}
+
+#[test]
+fn test_run_authorized_keys_cmd() {
+    let _ = log::set_boxed_logger(Box::new(super::logger::ConsoleLogger))
+        .map(|()| log::set_max_level(log::LevelFilter::Debug));
+    // let whoami = Passwd::current_user().unwrap().name;
+    let test_user = String::from("sshd");
+
+    let mut ret = run_authorized_keys_cmd("/bin/non-exist", &"root".into());
+    assert!(ret.is_err());
+    info!("err message: {}", ret.unwrap_err());
+
+    ret = run_authorized_keys_cmd("/bin/echo", &"root".to_string());
+    assert!(ret.is_ok());
+    assert_eq!(ret.unwrap(), "root\n");
+
+    ret = run_authorized_keys_cmd("/bin/echo", &test_user);
+    assert!(ret.is_ok());
+    assert_eq!(ret.unwrap(), test_user.clone() + "\n");
+
+    ret = run_authorized_keys_cmd("/bin/echo", &"no_such_user".into());
+    assert!(ret.is_err());
+    let mut err = ret.unwrap_err();
+    info!("err message: {}", err);
+    assert!(matches!(err.downcast::<RsshErr>().unwrap().as_ref(), RsshErr::GetUidErr));
+
+    ret = run_authorized_keys_cmd("/bin/false", &test_user);
+    assert!(ret.is_err());
+    err = ret.unwrap_err();
+    info!("err message: {}", err);
+    assert!(matches!(err.downcast::<RsshErr>().unwrap().as_ref(), RsshErr::CmdExitErr(Some(n)) if *n==1));
+
 }

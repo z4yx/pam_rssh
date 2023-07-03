@@ -35,7 +35,7 @@ fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool 
 }
 
 fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<PublicKey>, ErrType> {
-    if auth_key_file.len() == 0 {
+    if auth_key_file.is_empty() {
         let user = pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?;
         info!("Reading authorized_keys of user {}", user);
         auth_keys::parse_user_authorized_keys(&user)
@@ -43,6 +43,17 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
         info!("Reading configured authorized_keys file: {}", auth_key_file);
         auth_keys::parse_authorized_keys(auth_key_file)
     }
+}
+
+fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_as_user: &str) -> Result<Vec<PublicKey>, ErrType> {
+    let user = if run_as_user.is_empty() {
+        pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?
+    } else {
+        run_as_user.to_string()
+    };
+    debug!("Run command `{}` as user `{}`", auth_key_cmd, &user);
+    let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd, &user)?;
+    auth_keys::parse_content_of_authorized_keys(&content)
 }
 
 fn authenticate_via_agent(
@@ -82,6 +93,8 @@ impl PamHooks for PamRssh {
 
         let mut ssh_agent_addr = "";
         let mut auth_key_file = "";
+        let mut authorized_keys_command = "";
+        let mut authorized_keys_command_user = "";
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
             if kv.len() == 0 {
@@ -106,6 +119,16 @@ impl PamHooks for PamRssh {
                         auth_key_file = kv[1];
                     }
                 }
+                "authorized_keys_command" => {
+                    if kv.len() > 1 {
+                        authorized_keys_command = kv[1];
+                    }
+                }
+                "authorized_keys_command_user" => {
+                    if kv.len() > 1 {
+                        authorized_keys_command_user = kv[1];
+                    }
+                }
                 _ => {
                     error!("Unknown option `{}`", kv[0]);
                     return PamResultCode::PAM_SYSTEM_ERR;
@@ -127,7 +150,12 @@ impl PamHooks for PamRssh {
             }
         }
 
-        let authorized_keys = match read_authorized_keys(pamh, &auth_key_file) {
+        let authorized_keys_result = if authorized_keys_command.is_empty() {
+            read_authorized_keys(pamh, &auth_key_file)
+        } else {
+            retrieve_authorized_keys_from_cmd(pamh, &authorized_keys_command, &authorized_keys_command_user)
+        };
+        let authorized_keys = match authorized_keys_result {
             Ok(u) => {
                 info!("Got {} entries from authorized_keys", u.len());
                 u
