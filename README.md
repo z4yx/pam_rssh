@@ -37,15 +37,24 @@ Then build it using Cargo.
 
 ```
 cargo build --release
-cp target/release/libpam_rssh.so /usr/local/lib/
+cp target/release/libpam_rssh.so <pam module path>
 ```
+
+## `pam module path`
+- the module path is specific to certain distributions
+
+| OS           | Destination                         |
+| ------------ | ----------------------------------- |
+| Arch Linux   | `/usr/lib/security/`                |
+| Debian       | `/lib/x86_64-linux-gnu/security/`   |
+| openSUSE     | `/lib/security/`                    |
 
 ## Config
 
 Add the following line to `/etc/pam.d/sudo` (place it before existing rules):
 
 ```
-auth sufficient /usr/local/lib/libpam_rssh.so
+auth sufficient libpam_rssh.so
 ```
 
 Then edit sudoers with `visudo` command. Add the following line: (It makes `sudo` keep the environment variable, so this module can communicate with ssh-agent)
@@ -72,5 +81,5 @@ The following arguments are supported:
 Arguments should be appended to the PAM rule. For example:
 
 ```
-auth sufficient /usr/local/lib/libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
+auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
 ```
