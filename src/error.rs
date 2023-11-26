@@ -16,6 +16,10 @@ pub enum RsshErr {
     GetUidErr,
     CmdExitErr(Option<i32>),
     CmdOutputDecodeErr,
+    InvalidLogLvlErr,
+    OptNameErr(String),
+    OptValEmptyErr(String),
+    OptVarErr(String),
 }
 
 impl RsshErr {
@@ -45,6 +49,10 @@ impl Display for RsshErr {
             RsshErr::GetUidErr => S!("Cannot get uid of specified user"),
             RsshErr::CmdExitErr(code) => format!("Command exit code is {}", code.unwrap_or(-1)),
             RsshErr::CmdOutputDecodeErr => S!("Failed to decode the output of command"),
+            RsshErr::InvalidLogLvlErr => S!("Invalid log level"),
+            RsshErr::OptNameErr(name) => format!("Unknown option name `{}`", name),
+            RsshErr::OptValEmptyErr(name) => format!("Value of option `{}` is empty", name),
+            RsshErr::OptVarErr(name) => format!("Failed to evaluate variables in option `{}`", name),
         };
         f.write_str(&msg)
     }
