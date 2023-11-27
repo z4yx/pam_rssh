@@ -83,3 +83,21 @@ Arguments should be appended to the PAM rule. For example:
 ```
 auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
 ```
+
+## Use Variables in Arguments
+
+Certain variables can be used in arguments. Supported formats are `$var`, `${var}` and `${var:default value}`. For example:
+
+```
+auth sufficient libpam_rssh.so auth_key_file=/data/${user}.keys
+```
+
+Variables are mapped to PAM items. Currently the following variables are available:
+
+- service: PAM_SERVICE. The service name (which identifies the PAM stack that will be used).
+- user: PAM_USER. The username of the entity under whose identity service will be given.
+- tty: PAM_TTY. The terminal name.
+- rhost: PAM_RHOST. The requesting hostname.
+- ruser: PAM_RUSER. The requesting entity.
+
+For detailed description on PAM items, read man page pam_get_item(3).
