@@ -1,5 +1,5 @@
 use log::*;
-use openssl_sys::geteuid;
+use libc::geteuid;
 use pwd::Passwd;
 use ssh_agent::proto::from_bytes;
 use ssh_agent::proto::public_key::PublicKey;
