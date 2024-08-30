@@ -9,6 +9,7 @@ mod ssh_agent_auth;
 
 use log::*;
 use pam::constants::{PamFlag, PamResultCode};
+use pam::items::User;
 use pam::module::{PamHandle, PamHooks};
 use ssh_agent::proto::KeyTypeEnum;
 use ssh_agent::proto::public_key::PublicKey;
@@ -34,10 +35,16 @@ fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool 
     false
 }
 
+fn get_username_from_pam(pamh: &PamHandle) -> Result<&str, ErrType> {
+    let user_item: User = pamh.get_item().map_err(|_| RsshErr::GetUserErr)?.ok_or(RsshErr::GetUserErr)?;
+    let user = user_item.to_str().map_err(|_| RsshErr::UsernameDecodeErr)?;
+    Ok(user)
+}
+
 fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<PublicKey>, ErrType> {
     if auth_key_file.is_empty() {
-        let user = pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?;
-        info!("Reading authorized_keys of user {}", user);
+        let user = get_username_from_pam(pamh)?;
+        info!("Reading authorized_keys of user `{}`", user);
         auth_keys::parse_user_authorized_keys(&user)
     } else {
         info!("Reading configured authorized_keys file: {}", auth_key_file);
@@ -46,11 +53,11 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
 }
 
 fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_as_user: &str) -> Result<Vec<PublicKey>, ErrType> {
-    let auth_user = pamh.get_user(None).map_err(|_| RsshErr::GetUserErr)?;
+    let auth_user = get_username_from_pam(pamh)?;
     debug!("Run command `{}` as user `{}`", auth_key_cmd, run_as_user);
     let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd, 
-        auth_user.as_str(),
-        if run_as_user.is_empty() { auth_user.as_str() } else { run_as_user })?;
+        auth_user,
+        if run_as_user.is_empty() { auth_user } else { run_as_user })?;
     auth_keys::parse_content_of_authorized_keys(&content)
 }
 
