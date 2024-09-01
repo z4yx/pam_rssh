@@ -1,5 +1,9 @@
 use log::*;
-use openssl_sys::geteuid;
+#[link(name = "c")]
+extern "C" {
+    fn geteuid() -> u32;
+    fn getegid() -> u32;
+}
 use pwd::Passwd;
 use ssh_agent::proto::from_bytes;
 use ssh_agent::proto::public_key::PublicKey;
