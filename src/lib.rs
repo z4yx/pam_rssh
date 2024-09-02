@@ -6,6 +6,7 @@ mod error;
 mod logger;
 mod sign_verify;
 mod ssh_agent_auth;
+mod pam_items;
 
 use log::*;
 use pam::constants::{PamFlag, PamResultCode};
@@ -89,6 +90,18 @@ fn setup_logger() {
         .map(|()| log::set_max_level(log::LevelFilter::Warn));
 }
 
+fn substitute_variables(kv: &Vec<&str>, variables: &pam_items::PamItemsMap) -> Result<String, ErrType> {
+    subst::substitute(kv[1], variables)
+        .or(Err(RsshErr::OptVarErr(kv[0].to_string()).into_ptr()))
+}
+
+fn non_empty_option_check(kv: &Vec<&str>) -> Result<(), ErrType> {
+    if kv.len() == 1 || kv[1].is_empty() {
+        return Err(RsshErr::OptValEmptyErr(kv[0].to_string()).into_ptr())
+    }
+    Ok(())
+}
+
 impl PamHooks for PamRssh {
     fn sm_authenticate(pamh: &mut PamHandle, args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         /* if (flags & pam::constants::PAM_SILENT) == 0 */
@@ -96,48 +109,52 @@ impl PamHooks for PamRssh {
             setup_logger();
         }
 
-        let mut ssh_agent_addr = "";
-        let mut auth_key_file = "";
-        let mut authorized_keys_command = "";
-        let mut authorized_keys_command_user = "";
+        let pam_vars = pam_items::PamItemsMap::new(&pamh);
+        let mut ssh_agent_addr = String::new();
+        let mut auth_key_file = String::new();
+        let mut authorized_keys_command = String::new();
+        let mut authorized_keys_command_user = String::new();
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
             if kv.len() == 0 {
                 continue;
             }
             trace!("Parsing option {:?}", kv);
-            match kv[0] {
-                "loglevel" => {
-                    if kv.len() > 1 {
-                        let _ = log::Level::from_str(kv[1])
-                            .and_then(|level| Ok(log::set_max_level(level.to_level_filter())));
+            let mut parse_options = || -> Result<(), ErrType> {
+                match kv[0] {
+                    "loglevel" => {
+                        non_empty_option_check(&kv)?;
+                        match log::Level::from_str(kv[1]) {
+                            Ok(level) => log::set_max_level(level.to_level_filter()),
+                            Err(_) => { return Err(RsshErr::InvalidLogLvlErr.into_ptr()) }
+                        }
+                    }
+                    "debug" => log::set_max_level(log::LevelFilter::Debug),
+                    "ssh_agent_addr" => {
+                        non_empty_option_check(&kv)?;
+                        ssh_agent_addr = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    "auth_key_file" => {
+                        non_empty_option_check(&kv)?;
+                        auth_key_file = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    "authorized_keys_command" => {
+                        non_empty_option_check(&kv)?;
+                        authorized_keys_command = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    "authorized_keys_command_user" => {
+                        non_empty_option_check(&kv)?;
+                        authorized_keys_command_user = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    _ => {
+                        return Err(RsshErr::OptNameErr(kv[0].to_string()).into_ptr());
                     }
                 }
-                "debug" => log::set_max_level(log::LevelFilter::Debug),
-                "ssh_agent_addr" => {
-                    if kv.len() > 1 {
-                        ssh_agent_addr = kv[1];
-                    }
-                }
-                "auth_key_file" => {
-                    if kv.len() > 1 {
-                        auth_key_file = kv[1];
-                    }
-                }
-                "authorized_keys_command" => {
-                    if kv.len() > 1 {
-                        authorized_keys_command = kv[1];
-                    }
-                }
-                "authorized_keys_command_user" => {
-                    if kv.len() > 1 {
-                        authorized_keys_command_user = kv[1];
-                    }
-                }
-                _ => {
-                    error!("Unknown option `{}`", kv[0]);
-                    return PamResultCode::PAM_SYSTEM_ERR;
-                }
+                Ok(())
+            };
+            if let Err(opt_err) = parse_options() {
+                error!("{}", opt_err);
+                return PamResultCode::PAM_SYSTEM_ERR;
             }
         }
 
@@ -146,7 +163,7 @@ impl PamHooks for PamRssh {
             let agent_addr_os = std::env::var_os("SSH_AUTH_SOCK");
             if let Some(a) = agent_addr_os {
                 addr_from_env = a;
-                ssh_agent_addr = addr_from_env.to_str().unwrap_or("");
+                ssh_agent_addr = addr_from_env.to_str().unwrap_or("").to_string();
             }
             debug!("SSH-Agent address: {}", ssh_agent_addr);
             if ssh_agent_addr.is_empty() {
@@ -171,7 +188,7 @@ impl PamHooks for PamRssh {
             }
         };
 
-        let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr);
+        let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr.as_str());
         let result = agent.list_identities().and_then(|client_keys| {
             debug!("SSH-Agent reports {} keys", client_keys.len());
             for (i, key) in client_keys.iter().enumerate() {

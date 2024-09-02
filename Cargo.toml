@@ -1,6 +1,6 @@
 [package]
 name = "pam_rssh"
-version = "1.1.0"
+version = "1.2.0"
 authors = ["Yuxiang Zhang"]
 edition = "2018"
 
@@ -17,5 +17,6 @@ base64 = "^0.22.1"
 openssl-sys = "^0.9"
 openssl = "^0.10"
 log = { version = "^0.4", features = ["std", "serde"] }
+subst = "^0.3.0"
 syslog = "^7.0"
 pwd = "1"

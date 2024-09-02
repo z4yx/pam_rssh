@@ -41,7 +41,8 @@ cp target/release/libpam_rssh.so <pam module path>
 ```
 
 ## `pam module path`
-- the module path is specific to certain distributions
+
+The module path is specific to certain distributions
 
 | OS           | Destination                         |
 | ------------ | ----------------------------------- |
@@ -74,7 +75,7 @@ The following arguments are supported:
 - `loglevel=<off|error|warn|info|debug|trace>` Select the level of messages logged to syslog. Defaults to `warn`.
 - `debug` Equivalent to `loglevel=debug`. 
 - `ssh_agent_addr=<IP:port or UNIX domain address>` The address of ssh-agent. Defaults to the value of `SSH_AUTH_SOCK` environment variable, which is set by ssh automatically.
-- `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `$HOME/.ssh/authorized_keys`. Usually `$HOME` expands to `/home/<username>`.
+- `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `<home>/.ssh/authorized_keys`. `<home>` is read from system configuration, usually it expands to `/home/<username>`.
 - `authorized_keys_command=<Path to command>` A command to generate the authorized_keys. It takes a single argument, the username of the user being authenticated. The standard output of this command will be parsed as authorized_keys. The `auth_key_file` will be ignored if you specify this argument.
 - `authorized_keys_command_user=<Username>` The `authorized_keys_command` will be run as the user specified here. If this argument is omitted, the `authorized_keys_command` will be run as the user being authenticated.
 
@@ -83,3 +84,21 @@ Arguments should be appended to the PAM rule. For example:
 ```
 auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
 ```
+
+## Use Variables in Arguments
+
+Certain variables can be used in arguments. Supported formats are `$var`, `${var}` and `${var:default value}`. For example:
+
+```
+auth sufficient libpam_rssh.so auth_key_file=/data/${user}.keys
+```
+
+Variables are mapped to PAM items. Currently the following variables are available:
+
+- service: PAM_SERVICE. The service name (which identifies the PAM stack that will be used).
+- user: PAM_USER. The username of the entity under whose identity service will be given.
+- tty: PAM_TTY. The terminal name.
+- rhost: PAM_RHOST. The requesting hostname.
+- ruser: PAM_RUSER. The requesting entity.
+
+For detailed description on PAM items, read man page pam_get_item(3).
