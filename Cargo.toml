@@ -12,11 +12,11 @@ crate-type = ["cdylib"]
 pam-bindings = "0.1.1"
 ssh-agent = { path = "./dep/ssh-agent.rs" }
 multisock = "^1.0.0"
-byteorder = "1.2.7"
-base64 = "^0.13.0"
+byteorder = "1.5.0"
+base64 = "^0.22.1"
 openssl-sys = "^0.9"
 openssl = "^0.10"
 log = { version = "^0.4", features = ["std", "serde"] }
 subst = "^0.3.0"
-syslog = "^6.0"
+syslog = "^7.0"
 pwd = "1"
