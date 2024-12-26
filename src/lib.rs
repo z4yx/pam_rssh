@@ -9,16 +9,17 @@ mod ssh_agent_auth;
 mod pam_items;
 
 use log::*;
-use pam::constants::{PamFlag, PamResultCode};
+use pam::constants::{PamFlag, PamResultCode, PAM_TEXT_INFO};
 use pam::items::User;
-use pam::module::{PamHandle, PamHooks};
+use pam::module::{PamHandle, PamHooks, PamResult};
 use ssh_agent::proto::KeyTypeEnum;
 use ssh_agent::proto::public_key::PublicKey;
 use syslog::{BasicLogger, Facility, Formatter3164};
 
 use std::ffi::CStr;
 use std::str::FromStr;
-
+use pam::conv::Conv;
+use crate::error::RsshErr::SendPromptErr;
 use self::error::RsshErr;
 use self::logger::ConsoleLogger;
 
@@ -56,7 +57,7 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
 fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_as_user: &str) -> Result<Vec<PublicKey>, ErrType> {
     let auth_user = get_username_from_pam(pamh)?;
     debug!("Run command `{}` as user `{}`", auth_key_cmd, run_as_user);
-    let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd, 
+    let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd,
         auth_user,
         if run_as_user.is_empty() { auth_user } else { run_as_user })?;
     auth_keys::parse_content_of_authorized_keys(&content)
@@ -114,6 +115,8 @@ impl PamHooks for PamRssh {
         let mut auth_key_file = String::new();
         let mut authorized_keys_command = String::new();
         let mut authorized_keys_command_user = String::new();
+        let mut cue = false;
+        let mut cue_prompt = "Please touch the device.".to_string();
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
             if kv.len() == 0 {
@@ -145,6 +148,11 @@ impl PamHooks for PamRssh {
                     "authorized_keys_command_user" => {
                         non_empty_option_check(&kv)?;
                         authorized_keys_command_user = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    "cue" => cue = true,
+                    "cue_prompt" => {
+                        non_empty_option_check(&kv)?;
+                        cue_prompt = substitute_variables(&kv, &pam_vars)?;
                     }
                     _ => {
                         return Err(RsshErr::OptNameErr(kv[0].to_string()).into_ptr());
@@ -187,9 +195,22 @@ impl PamHooks for PamRssh {
                 return PamResultCode::PAM_CRED_INSUFFICIENT;
             }
         };
+        
+        let send_prompt = || -> PamResult<()> {
+            if cue {
+                pamh.get_item::<Conv>()?
+                    .ok_or(PamResultCode::PAM_BUF_ERR)?
+                    .send(PAM_TEXT_INFO, &cue_prompt)?;
+            }
+            Ok(())
+        };
+        if let Err(e) = send_prompt() {
+            error!("{}", SendPromptErr);
+            return e;
+        }
 
         let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr.as_str());
-        let result = agent.list_identities().and_then(|client_keys| {
+        let result = agent.list_identities().map(|client_keys| {
             debug!("SSH-Agent reports {} keys", client_keys.len());
             for (i, key) in client_keys.iter().enumerate() {
                 if !is_key_authorized(&key, &authorized_keys) {
@@ -200,7 +221,7 @@ impl PamHooks for PamRssh {
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
                         info!("Successful authentication");
-                        return Ok(true);
+                        return true;
                     }
                     Err(e) => {
                         warn!("Failed to authenticate key {}: {}", i, e);
@@ -209,7 +230,7 @@ impl PamHooks for PamRssh {
                 }
             }
             warn!("None of these keys passed authentication");
-            Ok(false)
+            false
         });
         match result {
             Ok(true) => PamResultCode::PAM_SUCCESS,
