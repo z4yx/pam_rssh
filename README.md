@@ -78,11 +78,13 @@ The following arguments are supported:
 - `auth_key_file=<Path to authorized_keys>` Public keys allowed for user authentication. Defaults to `<home>/.ssh/authorized_keys`. `<home>` is read from system configuration, usually it expands to `/home/<username>`.
 - `authorized_keys_command=<Path to command>` A command to generate the authorized_keys. It takes a single argument, the username of the user being authenticated. The standard output of this command will be parsed as authorized_keys. The `auth_key_file` will be ignored if you specify this argument.
 - `authorized_keys_command_user=<Username>` The `authorized_keys_command` will be run as the user specified here. If this argument is omitted, the `authorized_keys_command` will be run as the user being authenticated.
+- `cue` Enable device interaction prompt. When enabled, displays a message reminding the user to touch their device during authentication.
+- `[cue_prompt=<message>]` Set custom prompt message for device interaction. Default: "Please touch the device". Use square brackets to include spaces in the message.
 
 Arguments should be appended to the PAM rule. For example:
 
 ```
-auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody
+auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody cue [cue_prompt=long long prompt]
 ```
 
 ## Use Variables in Arguments

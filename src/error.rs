@@ -21,6 +21,7 @@ pub enum RsshErr {
     OptNameErr(String),
     OptValEmptyErr(String),
     OptVarErr(String),
+    SendPromptErr,
 }
 
 impl RsshErr {
@@ -55,6 +56,7 @@ impl Display for RsshErr {
             RsshErr::OptNameErr(name) => format!("Unknown option name `{}`", name),
             RsshErr::OptValEmptyErr(name) => format!("Value of option `{}` is empty", name),
             RsshErr::OptVarErr(name) => format!("Failed to evaluate variables in option `{}`", name),
+            RsshErr::SendPromptErr => S!("Failed to send prompt message"),
         };
         f.write_str(&msg)
     }
