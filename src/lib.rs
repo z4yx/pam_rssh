@@ -19,7 +19,6 @@ use syslog::{BasicLogger, Facility, Formatter3164};
 use std::ffi::CStr;
 use std::str::FromStr;
 use pam::conv::Conv;
-use crate::error::RsshErr::SendPromptErr;
 use self::error::RsshErr;
 use self::logger::ConsoleLogger;
 
@@ -204,10 +203,6 @@ impl PamHooks for PamRssh {
             }
             Ok(())
         };
-        if let Err(e) = send_prompt() {
-            error!("{}", SendPromptErr);
-            return e;
-        }
 
         let mut agent = ssh_agent_auth::AgentClient::new(ssh_agent_addr.as_str());
         let result = agent.list_identities().map(|client_keys| {
@@ -218,6 +213,9 @@ impl PamHooks for PamRssh {
                     continue;
                 }
                 debug!("Key[{}] is authorized", i);
+                if let Err(_) = send_prompt() {
+                    warn!("{}", RsshErr::SendPromptErr);
+                }
                 match authenticate_via_agent(&mut agent, &key) {
                     Ok(_) => {
                         info!("Successful authentication");
