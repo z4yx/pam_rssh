@@ -40,9 +40,7 @@ cargo build --release
 cp target/release/libpam_rssh.so <pam module path>
 ```
 
-## `pam module path`
-
-The module path is specific to certain distributions
+The `<pam module path>` is specific to certain Linux distributions.
 
 | OS           | Destination                         |
 | ------------ | ----------------------------------- |
@@ -84,7 +82,7 @@ The following arguments are supported:
 Arguments should be appended to the PAM rule. For example:
 
 ```
-auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody cue [cue_prompt=long long prompt]
+auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody cue [cue_prompt=The prompt message here]
 ```
 
 ## Use Variables in Arguments
@@ -95,12 +93,12 @@ Certain variables can be used in arguments. Supported formats are `$var`, `${var
 auth sufficient libpam_rssh.so auth_key_file=/data/${user}.keys
 ```
 
-Variables are mapped to PAM items. Currently the following variables are available:
+Variables are mapped to PAM items. Currently, the following variables are available:
 
-- service: PAM_SERVICE. The service name (which identifies the PAM stack that will be used).
-- user: PAM_USER. The username of the entity under whose identity service will be given.
-- tty: PAM_TTY. The terminal name.
-- rhost: PAM_RHOST. The requesting hostname.
-- ruser: PAM_RUSER. The requesting entity.
+- `service` - PAM_SERVICE. The service name (which identifies the PAM stack that will be used).
+- `user` - PAM_USER. The username of the entity under whose identity service will be given.
+- `tty` - PAM_TTY. The terminal name.
+- `rhost` - PAM_RHOST. The requesting hostname.
+- `ruser` - PAM_RUSER. The requesting entity.
 
-For detailed description on PAM items, read man page pam_get_item(3).
+For detailed descriptions of PAM items, read man page pam_get_item(3).
