@@ -66,6 +66,17 @@ Start a ssh-agent on your client, then add your keys with `ssh-add`.
 
 Try to ssh to your server with forwarded agent (-A option), and make a `sudo` there. 
 
+
+## Security Notice
+
+The default public key authorization file used by pam_rssh is `~/.ssh/authorized_keys`. Typically, this file is writable to users, meaning any program executed by the user can modify it. This enables malicious programs to exploit the file and gain root privileges via `sudo` without the user's knowledge.
+
+To mitigate this risk, you may configure the `auth_key_file` to a file only writable by root. This prevents unauthorized modifications and enhances system security. For example:
+
+```
+auth sufficient libpam_rssh.so auth_key_file=/etc/authorized_keys/${user}.keys
+```
+
 ## Optional Arguments
 
 The following arguments are supported:
