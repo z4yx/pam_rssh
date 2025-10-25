@@ -203,7 +203,7 @@ fn test_dsa_sign_verify() {
     let data2 = b"hola, mundo!";
 
     // Sign the data
-    let mut signer = Signer::new(MessageDigest::sha1(), &keypair).unwrap();
+    let mut signer = Signer::new(MessageDigest::sha256(), &keypair).unwrap();
     signer.update(data).unwrap();
     signer.update(data2).unwrap();
     let signature = signer.sign_to_vec().unwrap();
@@ -215,7 +215,7 @@ fn test_dsa_sign_verify() {
     );
 
     // Verify the data
-    let mut verifier = Verifier::new(MessageDigest::sha1(), &keypair).unwrap();
+    let mut verifier = Verifier::new(MessageDigest::sha256(), &keypair).unwrap();
     verifier.update(data).unwrap();
     verifier.update(data2).unwrap();
     assert!(verifier.verify(&signature).unwrap());
