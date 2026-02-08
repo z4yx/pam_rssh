@@ -48,6 +48,32 @@ The `<pam module path>` is specific to certain Linux distributions.
 | Debian       | `/lib/x86_64-linux-gnu/security/`   |
 | openSUSE     | `/lib/security/`                    |
 
+
+## Build using Docker (for cross compilation)
+Clone this repo with **a submodule**.
+
+```
+git clone --recurse-submodule https://github.com/z4yx/pam_rssh.git
+cd pam_rssh
+```
+
+Then build it using Docker. It creates a x86_64 Linux binary (on any platform, tested on Apple Silicon macOS). The resulting library depends on Glibc version 2.34 or newer.
+
+```
+./build.sh
+cp out/libpam_rssh.so <pam module path>
+```
+
+
+The `<pam module path>` is specific to certain Linux distributions.
+
+| OS           | Destination                         |
+| ------------ | ----------------------------------- |
+| Arch Linux   | `/usr/lib/security/`                |
+| Debian       | `/lib/x86_64-linux-gnu/security/`   |
+| openSUSE     | `/lib/security/`                    |
+
+
 ## Config
 
 Add the following line to `/etc/pam.d/sudo` (place it before existing rules):
