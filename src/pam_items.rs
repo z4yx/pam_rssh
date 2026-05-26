@@ -16,7 +16,7 @@ impl<'a> VariableMap<'a> for PamItemsMap<'a> {
 }
 
 impl<'a> PamItemsMap<'a> {
-    pub fn new(pam_handle: &PamHandle) ->PamItemsMap {
+    pub fn new(pam_handle: &PamHandle) ->PamItemsMap<'_> {
         PamItemsMap { pam: pam_handle }
     }
     fn get_str_val(&'a self, key: &str) -> PamResult<String> {

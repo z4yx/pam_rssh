@@ -2,8 +2,8 @@ use log::*;
 #[link(name = "c")]
 extern "C" {
     fn geteuid() -> u32;
-    fn getegid() -> u32;
 }
+use base64::{Engine as _, engine::general_purpose};
 use pwd::Passwd;
 use ssh_agent::proto::from_bytes;
 use ssh_agent::proto::public_key::PublicKey;
@@ -23,7 +23,7 @@ fn parse_pubkey_fields(line: &str) -> Result<PublicKey, ErrType> {
         if let Some(b64key) = fields.next() {
             let b64trimmed = b64key.trim_end();
             debug!("parse_pubkey_fields: {} {}", algo, b64trimmed);
-            let key = base64::decode(b64trimmed)
+            let key = general_purpose::STANDARD.decode(b64trimmed)
                 .map_err(|_| RsshErr::ParsePubkeyErr)
                 .and_then(|blob| from_bytes(&blob).map_err(|_| RsshErr::ParsePubkeyErr))?;
             return Ok(key);

@@ -22,7 +22,7 @@ pub struct AgentClient<'a> {
 static NET_RETRY_CNT: u32 = 3;
 
 impl<'a> AgentClient<'a> {
-    pub fn new(addr: &str) -> AgentClient {
+    pub fn new(addr: &str) -> AgentClient<'_> {
         AgentClient { addr, stream: None }
     }
 
