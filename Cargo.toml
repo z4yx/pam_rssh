@@ -9,7 +9,7 @@ name = "pam_rssh"
 crate-type = ["cdylib"]
 
 [dependencies]
-pam-bindings = "0.1.1"
+pam-bindings = "^0.2.1"
 ssh-agent = { path = "./dep/ssh-agent.rs" }
 multisock = "^1.0.0"
 byteorder = "1.5.0"
