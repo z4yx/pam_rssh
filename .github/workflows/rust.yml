@@ -45,10 +45,14 @@ jobs:
         cargo test --verbose
     - name: Build Debian Package
       run: dpkg-buildpackage -us -uc -b
+    - name: Collect DEB artifacts
+      run: |
+        mkdir -p deb-artifacts
+        mv ../*.deb ../*.changes deb-artifacts/ || true
     - name: Upload DEB artifacts
       uses: actions/upload-artifact@v4
       with:
         name: deb-packages
         path: |
-          ../*.deb
-          ../*.changes
+          deb-artifacts/*.deb
+          deb-artifacts/*.changes
