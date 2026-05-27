@@ -19,7 +19,7 @@ jobs:
     - name: Install Packages
       run: |
         sudo apt-get update
-        sudo apt-get install libpam0g-dev libssl-dev
+        sudo apt-get install libpam0g-dev libssl-dev debhelper devscripts
     - uses: actions/checkout@v2
       with:
         submodules: recursive
@@ -43,3 +43,12 @@ jobs:
         cp $HOME/.ssh/id_rsa.pub $HOME/.ssh/authorized_keys
         
         cargo test --verbose
+    - name: Build Debian Package
+      run: dpkg-buildpackage -us -uc -b
+    - name: Upload DEB artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: deb-packages
+        path: |
+          ../*.deb
+          ../*.changes

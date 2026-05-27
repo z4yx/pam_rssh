@@ -1,0 +1,33 @@
+Source: pam-rssh
+Priority: optional
+Maintainer: Yuxiang Zhang <yuxiang.zhang@tuna.tsinghua.edu.cn>
+Build-Depends: debhelper-compat (= 12),
+               cargo,
+               rustc,
+               libpam0g-dev,
+               libssl-dev,
+               pkg-config
+Standards-Version: 4.6.1
+Homepage: https://github.com/z4yx/pam_rssh
+Vcs-Git: https://github.com/z4yx/pam_rssh.git
+Vcs-Browser: https://github.com/z4yx/pam_rssh
+Rules-Requires-Root: no
+
+Package: pam-rssh
+Architecture: amd64 arm64 armhf i386 ppc64el s390x riscv64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libpam0g
+Description: PAM module for SSH-agent based authentication
+ This PAM module provides ssh-agent based authentication. It allows
+ authentication using SSH keys forwarded through ssh-agent instead of
+ typing passwords. This is particularly useful for remote sudo access
+ with hardware security keys like Yubikey or Canokey.
+ .
+ Supported SSH key types:
+  - RSA (with SHA256 digest)
+  - DSA
+  - ECDSA 256/384/521
+  - ECDSA-SK (FIDO2/U2F)
+  - ED25519
+  - ED25519-SK (FIDO2)
