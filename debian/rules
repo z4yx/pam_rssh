@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_install:
+	mkdir -p debian/pam-rssh/lib/$(DEB_HOST_MULTIARCH)/security/
+	cp target/release/libpam_rssh.so debian/pam-rssh/lib/$(DEB_HOST_MULTIARCH)/security/
+
+override_dh_auto_test:
+	cargo test --release
