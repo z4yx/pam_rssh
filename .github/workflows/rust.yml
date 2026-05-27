@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, wip-ci ]
   pull_request:
     branches: [ main ]
 
