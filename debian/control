@@ -1,7 +1,7 @@
 Source: pam-rssh
 Priority: optional
 Maintainer: Yuxiang Zhang <yuxiang.zhang@tuna.tsinghua.edu.cn>
-Build-Depends: debhelper (>= 12),
+Build-Depends: debhelper-compat (= 12),
                cargo,
                rustc,
                libpam0g-dev,
