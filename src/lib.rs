@@ -195,11 +195,15 @@ impl PamHooks for PamRssh {
             }
         };
         
+        // Cue at most once per authentication: the loop below tries every
+        // authorized key, and absent-token keys would each prompt otherwise.
+        let cue_sent = std::cell::Cell::new(false);
         let send_prompt = || -> PamResult<()> {
-            if cue {
+            if cue && !cue_sent.get() {
                 pamh.get_item::<Conv>()?
                     .ok_or(PamResultCode::PAM_BUF_ERR)?
                     .send(PAM_TEXT_INFO, &cue_prompt)?;
+                cue_sent.set(true);
             }
             Ok(())
         };
