@@ -14,13 +14,13 @@ use pam::items::User;
 use pam::module::{PamHandle, PamHooks, PamResult};
 use ssh_agent::proto::KeyTypeEnum;
 use ssh_agent::proto::public_key::PublicKey;
-use syslog::{BasicLogger, Facility, Formatter3164};
 
 use std::ffi::CStr;
 use std::str::FromStr;
 use pam::conv::Conv;
 use self::error::RsshErr;
 use self::logger::ConsoleLogger;
+use self::logger::SyslogLogger;
 
 type ErrType = Box<dyn std::error::Error>;
 
@@ -77,15 +77,8 @@ fn authenticate_via_agent(
 }
 
 fn setup_logger() {
-    let formatter = Formatter3164 {
-        facility: Facility::LOG_AUTH,
-        hostname: None,
-        process: "pam_rssh".into(),
-        pid: std::process::id() as u32,
-    };
-    syslog::unix(formatter)
+    log::set_boxed_logger(Box::new(SyslogLogger))
         .ok()
-        .and_then(|logger| log::set_boxed_logger(Box::new(BasicLogger::new(logger))).ok())
         .or_else(|| log::set_boxed_logger(Box::new(ConsoleLogger)).ok())
         .map(|()| log::set_max_level(log::LevelFilter::Warn));
 }
