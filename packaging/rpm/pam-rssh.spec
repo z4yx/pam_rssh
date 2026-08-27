@@ -5,7 +5,7 @@
 # script (and .github/workflows/rpm-release.yml) takes care of that.
 
 Name:           pam-rssh
-Version:        1.2.0
+Version:        1.2.2
 Release:        1%{?dist}
 Summary:        PAM module for SSH-agent based authentication
 
@@ -82,5 +82,9 @@ ssh-agent -k
 %license LICENSE
 
 %changelog
+* Thu Aug 27 2026 Yuxiang Zhang <z4yx@users.noreply.github.com> - 1.2.2-1
+- Replace syslog crate with libsyslog (native system syslog)
+- Add RPM packages for more distributions (Fedora)
+
 * Wed Aug 26 2026 Yuxiang Zhang <z4yx@users.noreply.github.com> - 1.2.0-1
 - Initial RPM package

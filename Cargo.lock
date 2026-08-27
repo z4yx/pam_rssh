@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "pam_rssh"
-version = "1.2.0"
+version = "1.2.2"
 dependencies = [
  "base64",
  "byteorder",

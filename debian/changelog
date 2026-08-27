@@ -1,3 +1,10 @@
+pam-rssh (1.2.2-1) unstable; urgency=medium
+
+  * Replace syslog crate with libsyslog (native system syslog)
+  * Add RPM packages for more distributions (Fedora)
+
+ -- Yuxiang Zhang <z4yx@users.noreply.github.com>  Thu, 27 Aug 2026 00:00:00 +0000
+
 pam-rssh (1.2.0-1) unstable; urgency=medium
 
   * Initial Debian package release
