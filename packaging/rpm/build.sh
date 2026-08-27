@@ -6,7 +6,7 @@
 # on a Fedora/RHEL host with the required build tools installed:
 #
 #   dnf install rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
-#             openssh-clients make gcc diffutils tar gzip
+#             openssh-clients make gcc diffutils tar gzip clang-devel
 #
 # It vendors all Cargo dependencies into the source tarball so that rpmbuild
 # can run fully offline (no network access to crates.io during the build).

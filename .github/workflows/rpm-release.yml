@@ -55,7 +55,7 @@ jobs:
             bash -euxc '
               dnf -y install --setopt=install_weak_deps=False \
                 rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
-                openssh-clients make gcc diffutils tar gzip
+                openssh-clients make gcc diffutils tar gzip clang-devel
               bash /work/packaging/rpm/build.sh
             '
 

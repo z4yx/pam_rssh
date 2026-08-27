@@ -24,6 +24,8 @@ BuildRequires:  diffutils
 # --- Native library headers (needed by openssl-sys / pam-bindings) ---
 BuildRequires:  openssl-devel
 BuildRequires:  pam-devel
+# --- libclang (needed by libsyslog-sys to generate FFI bindings via bindgen) ---
+BuildRequires:  clang-devel
 # --- Needed by the test-suite (ssh-keygen / ssh-agent / ssh-add) ---
 BuildRequires:  openssh-clients
 
