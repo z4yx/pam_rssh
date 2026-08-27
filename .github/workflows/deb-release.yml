@@ -51,7 +51,7 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends \
                 build-essential debhelper devscripts dpkg-dev fakeroot \
-                cargo rustc libpam0g-dev libssl-dev pkg-config \
+                cargo rustc libpam0g-dev libclang-dev libssl-dev pkg-config \
                 openssh-client ca-certificates
               # dpkg-buildpackage writes its artifacts to the parent dir (/).
               dpkg-buildpackage -us -uc -b
@@ -85,7 +85,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            libpam0g-dev libssl-dev debhelper devscripts build-essential cargo rustc pkg-config
+            libpam0g-dev libclang-dev libssl-dev debhelper devscripts build-essential cargo rustc pkg-config
 
       - name: Build Debian package
         run: |
