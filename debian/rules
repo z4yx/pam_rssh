@@ -13,8 +13,10 @@ override_dh_auto_install:
 	mkdir -p debian/pam-rssh/lib/$(DEB_HOST_MULTIARCH)/security/
 	cp target/release/libpam_rssh.so debian/pam-rssh/lib/$(DEB_HOST_MULTIARCH)/security/
 
-override_dh_auto_test: export SSH_AUTH_SOCK = /tmp/ssh-agent.sock
+export SSH_AUTH_SOCK = /tmp/ssh-agent.sock
+export USER = $(shell whoami)
 override_dh_auto_test:
+	rm -f $$SSH_AUTH_SOCK
 	test -f $(HOME)/.ssh/id_ecdsa521 || ssh-keygen -N "" -t ecdsa -b 521 -f $(HOME)/.ssh/id_ecdsa521
 	test -f $(HOME)/.ssh/id_ecdsa384 || ssh-keygen -N "" -t ecdsa -b 384 -f $(HOME)/.ssh/id_ecdsa384
 	test -f $(HOME)/.ssh/id_ecdsa256 || ssh-keygen -N "" -t ecdsa -b 256 -f $(HOME)/.ssh/id_ecdsa256

@@ -1,4 +1,4 @@
-name: Build DEB and Release
+name: Build DEB (Debian Docker + Ubuntu) and Release
 
 on:
   push:
@@ -15,8 +15,63 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-deb:
-    name: Build (.deb) on ${{ matrix.os }}
+  build-deb-debian:
+    name: Debian Docker (${{ matrix.release }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release: bookworm
+            arch: amd64
+            runner: ubuntu-24.04
+          - release: bookworm
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - release: trixie
+            arch: amd64
+            runner: ubuntu-24.04
+          - release: trixie
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build DEB inside Debian container
+        run: |
+          docker run --rm \
+            --platform linux/${{ matrix.arch }} \
+            -v "$PWD":/work:rw \
+            -w /work \
+            rust:${{ matrix.release }} \
+            bash -euxc '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential debhelper devscripts dpkg-dev fakeroot \
+                cargo rustc libpam0g-dev libclang-dev libssl-dev pkg-config \
+                openssh-client ca-certificates
+              # dpkg-buildpackage writes its artifacts to the parent dir (/).
+              dpkg-buildpackage -us -uc -b
+              mkdir -p /work/deb-artifacts
+              cp /pam-rssh_*.deb /work/deb-artifacts/ || true
+              cp /pam-rssh_*.changes /work/deb-artifacts/ || true
+            '
+
+      - name: List DEB artifacts
+        run: ls -lh deb-artifacts/
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-packages-${{ matrix.release }}-${{ matrix.arch }}
+          path: deb-artifacts/
+          if-no-files-found: error
+
+  build-deb-ubuntu:
+    name: Ubuntu (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -30,7 +85,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            libpam0g-dev libssl-dev debhelper devscripts build-essential cargo rustc pkg-config
+            libpam0g-dev libclang-dev libssl-dev debhelper devscripts build-essential cargo rustc pkg-config
 
       - name: Build Debian package
         run: |
@@ -51,7 +106,7 @@ jobs:
   release:
     name: Create GitHub Release and upload DEBs
     runs-on: ubuntu-latest
-    needs: build-deb
+    needs: [build-deb-debian, build-deb-ubuntu]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Determine release tag
@@ -62,6 +117,30 @@ jobs:
           else
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Download artifacts (bookworm-amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-bookworm-amd64
+          path: downloaded/bookworm-amd64
+
+      - name: Download artifacts (bookworm-arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-bookworm-arm64
+          path: downloaded/bookworm-arm64
+
+      - name: Download artifacts (trixie-amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-trixie-amd64
+          path: downloaded/trixie-amd64
+
+      - name: Download artifacts (trixie-arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-trixie-arm64
+          path: downloaded/trixie-arm64
 
       - name: Download artifacts (ubuntu-26.04)
         uses: actions/download-artifact@v4
@@ -119,7 +198,7 @@ jobs:
           files: downloaded/**/*.deb
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
-          body: Automated .deb builds for multiple Ubuntu versions
+          body: Automated .deb builds for Debian (bookworm, trixie) and Ubuntu (22.04/24.04/26.04)
           draft: false
           prerelease: false
         env:

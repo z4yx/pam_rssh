@@ -14,7 +14,7 @@ use pam::items::User;
 use pam::module::{PamHandle, PamHooks, PamResult};
 use ssh_agent::proto::KeyTypeEnum;
 use ssh_agent::proto::public_key::PublicKey;
-use syslog::{BasicLogger, Facility, Formatter3164};
+use libsyslog::{Facility, Logopt};
 
 use std::ffi::CStr;
 use std::str::FromStr;
@@ -76,18 +76,26 @@ fn authenticate_via_agent(
     }
 }
 
+fn setup_syslog() -> Result<(), ErrType> {
+    libsyslog::Syslog::builder()
+        .facility(Facility::Auth)
+        .level(log::LevelFilter::Debug)
+        .logopt(Logopt::Pid)
+       // .ident("pam_rssh")?
+        .build()
+        .init()?;
+
+    Ok(())
+}
+
 fn setup_logger() {
-    let formatter = Formatter3164 {
-        facility: Facility::LOG_AUTH,
-        hostname: None,
-        process: "pam_rssh".into(),
-        pid: std::process::id() as u32,
-    };
-    syslog::unix(formatter)
-        .ok()
-        .and_then(|logger| log::set_boxed_logger(Box::new(BasicLogger::new(logger))).ok())
-        .or_else(|| log::set_boxed_logger(Box::new(ConsoleLogger)).ok())
-        .map(|()| log::set_max_level(log::LevelFilter::Warn));
+
+    if let Err(e) = setup_syslog() {
+        // Fall back to logging to stdout when the native syslog is unavailable.
+        log::set_boxed_logger(Box::new(ConsoleLogger)).ok();
+        error!("Failed to set up syslog: {}", e);
+    }
+    log::set_max_level(log::LevelFilter::Warn)
 }
 
 fn substitute_variables(kv: &Vec<&str>, variables: &pam_items::PamItemsMap) -> Result<String, ErrType> {

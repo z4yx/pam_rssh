@@ -74,6 +74,25 @@ The `<pam module path>` is specific to certain Linux distributions.
 | openSUSE     | `/lib/security/`                    |
 
 
+## Build RPM package (Fedora / RHEL)
+
+An RPM spec (`packaging/rpm/pam-rssh.spec`) and a helper script
+(`packaging/rpm/build.sh`) are provided. The spec vendors all Cargo
+dependencies so the build runs fully offline.
+
+On a Fedora/RHEL host with `rpm-build` and the Rust toolchain installed:
+
+```
+sudo dnf install rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
+                 openssh-clients make gcc diffutils tar gzip
+./packaging/rpm/build.sh
+```
+
+The resulting `.rpm` files are written to `./rpm-artifacts/`. The module is
+installed to `/usr/lib64/security/libpam_rssh.so`. CI builds for Fedora
+(42/43/44) are handled by `.github/workflows/rpm-release.yml`.
+
+
 ## Config
 
 Add the following line to `/etc/pam.d/sudo` (place it before existing rules):
