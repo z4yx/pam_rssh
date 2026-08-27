@@ -1,0 +1,2 @@
+# Exclude Rust build artifacts from generated source packages
+tar-ignore = target

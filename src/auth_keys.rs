@@ -94,8 +94,10 @@ pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrT
     let _ = Passwd::from_name(username).map(|opt_passwd| {
         opt_passwd.map(|passwd| {
             prefix = passwd.dir;
+            debug!("Got home dir of user {}: {}", username, prefix);
         })
     });
+    debug!("Searching for authorized_keys in {}", prefix);
     let path: PathBuf = [prefix.as_str(), ".ssh", "authorized_keys"]
         .iter()
         .collect();
