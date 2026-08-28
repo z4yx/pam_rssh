@@ -11,6 +11,7 @@ on:
         description: 'Tag to use for the release (if using manual dispatch)'
         required: false
 
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -24,43 +25,54 @@ jobs:
         include:
           # Fedora
           - distro: fedora
+            image: fedora
             version: 44
             arch: amd64
             runner: ubuntu-24.04
           - distro: fedora
+            image: fedora
             version: 44
             arch: arm64
             runner: ubuntu-24.04-arm
           - distro: fedora
+            image: fedora
             version: 43
             arch: amd64
             runner: ubuntu-24.04
           - distro: fedora
+            image: fedora
             version: 43
             arch: arm64
             runner: ubuntu-24.04-arm
           - distro: fedora
+            image: fedora
             version: 42
             arch: amd64
             runner: ubuntu-24.04
           - distro: fedora
+            image: fedora
             version: 42
             arch: arm64
             runner: ubuntu-24.04-arm
           # RHEL-compatible rebuilds (Rocky Linux mirrors RHEL 9/10)
+          # NB: Rocky images live under the rockylinux/rockylinux namespace
           - distro: rockylinux
+            image: rockylinux/rockylinux
             version: 10
             arch: amd64
             runner: ubuntu-24.04
           - distro: rockylinux
+            image: rockylinux/rockylinux
             version: 10
             arch: arm64
             runner: ubuntu-24.04-arm
           - distro: rockylinux
+            image: rockylinux/rockylinux
             version: 9
             arch: amd64
             runner: ubuntu-24.04
           - distro: rockylinux
+            image: rockylinux/rockylinux
             version: 9
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -75,7 +87,7 @@ jobs:
             --platform linux/${{ matrix.arch }} \
             -v "$PWD":/work:rw \
             -w /work \
-            ${{ matrix.distro }}:${{ matrix.version }} \
+            ${{ matrix.image }}:${{ matrix.version }} \
             bash -euxc '
               dnf -y install --setopt=install_weak_deps=False \
                 rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
