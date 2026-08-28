@@ -13,6 +13,11 @@ License:        MIT
 URL:            https://github.com/z4yx/pam_rssh
 Source0:        %{name}-%{version}.tar.gz
 
+# rustc-generated DWARF cannot be processed by find-debuginfo, which leads to
+# an empty debugsourcefiles.list ("Empty %files file" error) during rpmbuild.
+# Disable the automatic -debuginfo/-debugsource subpackages.
+%global debug_package %{nil}
+
 # --- Rust toolchain ---
 BuildRequires:  cargo
 BuildRequires:  rustc
