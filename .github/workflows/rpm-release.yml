@@ -94,7 +94,7 @@ jobs:
                 openssh-clients make gcc diffutils tar gzip clang-devel
               bash /work/packaging/rpm/build.sh
               cd rpm-artifacts
-              find . -type f -name "*.rpm" -exec mv {} ${{ matrix.distro }}-{} \;
+              ls *.rpm | xargs -I{} mv {} ${{ matrix.distro }}-{}
             '
 
       - name: List RPM artifacts
