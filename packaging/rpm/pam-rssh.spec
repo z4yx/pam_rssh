@@ -86,7 +86,7 @@ ssh-agent -k
 %changelog
 * Thu Aug 27 2026 Yuxiang Zhang <z4yx@users.noreply.github.com> - 1.2.2-1
 - Replace syslog crate with libsyslog (native system syslog)
-- Add RPM packages for more distributions (Fedora)
+- Add RPM packages for more distributions (Fedora, RHEL-compatible Rocky Linux)
 
 * Wed Aug 26 2026 Yuxiang Zhang <z4yx@users.noreply.github.com> - 1.2.0-1
 - Initial RPM package

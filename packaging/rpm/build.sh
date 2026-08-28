@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build an RPM package for pam-rssh.
 #
-# This script is intended to run inside a Fedora container where the repo is
-# mounted at /work (see .github/workflows/rpm-release.yml), but it also works
-# on a Fedora/RHEL host with the required build tools installed:
+# This script is intended to run inside a Fedora/Rocky Linux (RHEL-family)
+# container where the repo is mounted at /work (see
+# .github/workflows/rpm-release.yml), but it also works on a Fedora/RHEL host
+# with the required build tools installed:
 #
 #   dnf install rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
 #             openssh-clients make gcc diffutils tar gzip clang-devel

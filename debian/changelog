@@ -1,7 +1,7 @@
 pam-rssh (1.2.2-1) unstable; urgency=medium
 
   * Replace syslog crate with libsyslog (native system syslog)
-  * Add RPM packages for more distributions (Fedora)
+  * Add RPM packages for more distributions (Fedora, RHEL-compatible Rocky Linux)
 
  -- Yuxiang Zhang <z4yx@users.noreply.github.com>  Thu, 27 Aug 2026 00:00:00 +0000
 

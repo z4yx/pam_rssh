@@ -122,25 +122,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: deb-packages-bookworm-amd64
-          path: downloaded/bookworm-amd64
+          path: downloaded/debian-bookworm-amd64
 
       - name: Download artifacts (bookworm-arm64)
         uses: actions/download-artifact@v4
         with:
           name: deb-packages-bookworm-arm64
-          path: downloaded/bookworm-arm64
+          path: downloaded/debian-bookworm-arm64
 
       - name: Download artifacts (trixie-amd64)
         uses: actions/download-artifact@v4
         with:
           name: deb-packages-trixie-amd64
-          path: downloaded/trixie-amd64
+          path: downloaded/debian-trixie-amd64
 
       - name: Download artifacts (trixie-arm64)
         uses: actions/download-artifact@v4
         with:
           name: deb-packages-trixie-arm64
-          path: downloaded/trixie-arm64
+          path: downloaded/debian-trixie-arm64
 
       - name: Download artifacts (ubuntu-26.04)
         uses: actions/download-artifact@v4

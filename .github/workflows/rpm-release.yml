@@ -1,4 +1,4 @@
-name: Build RPM (Fedora) and Release
+name: Build RPM (Fedora & RHEL) and Release
 
 on:
   push:
@@ -16,28 +16,52 @@ env:
 
 jobs:
   build-rpm:
-    name: RPM (${{ matrix.fedora }}-${{ matrix.arch }})
+    name: RPM (${{ matrix.distro }}-${{ matrix.version }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - fedora: 44
+          # Fedora
+          - distro: fedora
+            version: 44
             arch: amd64
             runner: ubuntu-24.04
-          - fedora: 44
+          - distro: fedora
+            version: 44
             arch: arm64
             runner: ubuntu-24.04-arm
-          - fedora: 43
+          - distro: fedora
+            version: 43
             arch: amd64
             runner: ubuntu-24.04
-          - fedora: 43
+          - distro: fedora
+            version: 43
             arch: arm64
             runner: ubuntu-24.04-arm
-          - fedora: 42
+          - distro: fedora
+            version: 42
             arch: amd64
             runner: ubuntu-24.04
-          - fedora: 42
+          - distro: fedora
+            version: 42
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          # RHEL-compatible rebuilds (Rocky Linux mirrors RHEL 9/10)
+          - distro: rockylinux
+            version: 10
+            arch: amd64
+            runner: ubuntu-24.04
+          - distro: rockylinux
+            version: 10
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - distro: rockylinux
+            version: 9
+            arch: amd64
+            runner: ubuntu-24.04
+          - distro: rockylinux
+            version: 9
             arch: arm64
             runner: ubuntu-24.04-arm
     steps:
@@ -45,13 +69,13 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build RPM inside Fedora container
+      - name: Build RPM inside container
         run: |
           docker run --rm \
             --platform linux/${{ matrix.arch }} \
             -v "$PWD":/work:rw \
             -w /work \
-            fedora:${{ matrix.fedora }} \
+            ${{ matrix.distro }}:${{ matrix.version }} \
             bash -euxc '
               dnf -y install --setopt=install_weak_deps=False \
                 rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
@@ -65,7 +89,7 @@ jobs:
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-packages-${{ matrix.fedora }}-${{ matrix.arch }}
+          name: rpm-packages-${{ matrix.distro }}-${{ matrix.version }}-${{ matrix.arch }}
           path: rpm-artifacts/
           if-no-files-found: error
 
@@ -97,7 +121,7 @@ jobs:
           files: downloaded/**/*.rpm
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
-          body: Automated .rpm builds for Fedora (42/43/44)
+          body: Automated .rpm builds for Fedora (42/43/44) and RHEL-compatible Rocky Linux (9/10)
           draft: false
           prerelease: false
         env:
