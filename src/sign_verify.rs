@@ -149,6 +149,12 @@ fn preprocess_content_and_sig(
                 PublicKey::SkEd25519(k) => &k.application,
                 _ => panic!()
             };
+            // Bit 0 of the flags byte is the U2F "user presence" bit. Without
+            // it the key signed without a touch, so refuse the signature.
+            if sig.flags & 0x01 == 0 {
+                error!("user presence missing in security-key signature");
+                return Err(RsshErr::InvalidSigErr.into_ptr());
+            }
             let mut new_msg = Vec::with_capacity(32 + 1 + 4 + 32);
             new_msg.extend_from_slice(&sha256(app.as_bytes()));
             new_msg.push(sig.flags);
@@ -219,4 +225,78 @@ fn test_dsa_sign_verify() {
     verifier.update(data).unwrap();
     verifier.update(data2).unwrap();
     assert!(verifier.verify(&signature).unwrap());
+}
+
+#[test]
+fn rejects_missing_user_presence() {
+    use ssh_agent::proto::public_key::{Ed25519PublicKey, SkEd25519PublicKey};
+    use ssh_agent::proto::to_bytes;
+
+    let sk_key = PublicKey::SkEd25519(SkEd25519PublicKey {
+        enc_a: vec![0; 32],
+        application: "ssh:".to_string(),
+    });
+    let sk_sig = |flags: u8| {
+        to_bytes(&proto::SkSignature {
+            algorithm: "sk-ssh-ed25519@openssh.com".to_string(),
+            blob: vec![0; 64],
+            flags,
+            counter: 1,
+        })
+        .unwrap()
+    };
+
+    // User presence bit clear: rejected, even with the verified bit set.
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key).is_err());
+    // User presence bit set: accepted.
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key).is_ok());
+
+    // A non-security-key signature has no flags byte and is unchanged.
+    let plain_key = PublicKey::Ed25519(Ed25519PublicKey { enc_a: vec![0; 32] });
+    let plain_sig = to_bytes(&proto::Signature {
+        algorithm: "ssh-ed25519".to_string(),
+        blob: vec![0; 64],
+    })
+    .unwrap();
+    let (msg, sig) = preprocess_content_and_sig(b"msg", &plain_sig, &plain_key).unwrap();
+    assert_eq!(msg, b"msg".to_vec());
+    assert_eq!(sig, vec![0; 64]);
+}
+
+#[test]
+fn rejects_missing_user_presence_ecdsa() {
+    use ssh_agent::proto::public_key::SkEcDsaPublicKey;
+    use ssh_agent::proto::signature::EcDsaSignatureData;
+    use ssh_agent::proto::to_bytes;
+
+    let sk_key = PublicKey::SkEcDsa(SkEcDsaPublicKey {
+        identifier: "nistp256".to_string(),
+        q: vec![0; 65],
+        application: "ssh:".to_string(),
+    });
+    // Accepted signatures have their blob decoded as r||s, so build a minimal
+    // valid one.
+    let blob = to_bytes(&EcDsaSignatureData {
+        r: vec![1; 32],
+        s: vec![1; 32],
+    })
+    .unwrap();
+    let sk_sig = |flags: u8| {
+        to_bytes(&proto::SkSignature {
+            algorithm: "sk-ecdsa-sha2-nistp256@openssh.com".to_string(),
+            blob: blob.clone(),
+            flags,
+            counter: 1,
+        })
+        .unwrap()
+    };
+
+    // User presence bit clear: rejected, even with the verified bit set.
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key).is_err());
+    // User presence bit set: accepted.
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key).is_ok());
 }
