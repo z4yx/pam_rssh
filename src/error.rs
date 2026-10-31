@@ -22,6 +22,8 @@ pub enum RsshErr {
     OptValEmptyErr(String),
     OptVarErr(String),
     SendPromptErr,
+    CmdlineTooLongErr(usize),
+    ChallengeErr(String),
 }
 
 impl RsshErr {
@@ -57,6 +59,8 @@ impl Display for RsshErr {
             RsshErr::OptValEmptyErr(name) => format!("Value of option `{}` is empty", name),
             RsshErr::OptVarErr(name) => format!("Failed to evaluate variables in option `{}`", name),
             RsshErr::SendPromptErr => S!("Failed to send prompt message"),
+            RsshErr::CmdlineTooLongErr(len) => format!("Command line is too long to send to the agent ({} bytes)", len),
+            RsshErr::ChallengeErr(name) => format!("Unknown challenge `{}`", name),
         };
         f.write_str(&msg)
     }
