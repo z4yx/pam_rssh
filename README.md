@@ -134,12 +134,31 @@ The following arguments are supported:
 - `authorized_keys_command_user=<Username>` The `authorized_keys_command` will be run as the user specified here. If this argument is omitted, the `authorized_keys_command` will be run as the user being authenticated.
 - `cue` Enable device interaction prompt. When enabled, displays a message reminding the user to touch their device during authentication.
 - `[cue_prompt=<message>]` Set custom prompt message for device interaction. Default: "Please touch the device". Use square brackets to include spaces in the message.
+- `challenge=<random|pam_ssh_agent_auth>` What the ssh-agent is asked to sign. Defaults to `random`, 32 random bytes. `pam_ssh_agent_auth` sends the details of the request instead; see [Request Details for the Agent](#request-details-for-the-agent).
 
 Arguments should be appended to the PAM rule. For example:
 
 ```
 auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody cue [cue_prompt=The prompt message here]
 ```
+
+## Request Details for the Agent
+
+By default the ssh-agent is asked to sign random bytes, so it can't tell what it is approving. With `challenge=pam_ssh_agent_auth`, it is asked to sign the details of the request instead, in the format used by [pam_ssh_agent_auth](https://github.com/jbeverly/pam_ssh_agent_auth):
+
+- the user being authenticated (PAM_USER) and the user requesting it (PAM_RUSER, or the user running the program);
+- the PAM service, such as `sudo`;
+- the command line of the program, which for `sudo` is the command being run;
+- the working directory, the hostname and the time;
+- a random cookie, so that every request is different.
+
+An agent which confirms each signature, such as one forwarded from a phone or another machine, can then show the user which command they are approving, and log it. Agents which already understand pam_ssh_agent_auth's requests understand these too, and any other agent signs them as usual.
+
+```
+auth sufficient libpam_rssh.so auth_key_file=/etc/authorized_keys/${user}.keys challenge=pam_ssh_agent_auth
+```
+
+The command line is read from `/proc/self/cmdline`, so it is only sent on Linux, and requests longer than 64 KiB are refused rather than cut short. Unlike pam_ssh_agent_auth, empty arguments are kept, so the command the agent sees is the command being run.
 
 ## Use Variables in Arguments
 
