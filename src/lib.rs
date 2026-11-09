@@ -27,13 +27,11 @@ type ErrType = Box<dyn std::error::Error>;
 struct PamRssh;
 pam_hooks!(PamRssh);
 
-fn is_key_authorized(key: &PublicKey, authorized_keys: &Vec<PublicKey>) -> bool {
-    for item in authorized_keys {
-        if item == key {
-            return true;
-        }
-    }
-    false
+fn is_key_authorized<'a>(
+    key: &PublicKey,
+    authorized_keys: &'a [auth_keys::AuthorizedKey],
+) -> Option<&'a auth_keys::AuthorizedKey> {
+    authorized_keys.iter().find(|item| &item.pubkey == key)
 }
 
 fn get_username_from_pam(pamh: &PamHandle) -> Result<&str, ErrType> {
@@ -42,7 +40,10 @@ fn get_username_from_pam(pamh: &PamHandle) -> Result<&str, ErrType> {
     Ok(user)
 }
 
-fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<PublicKey>, ErrType> {
+fn read_authorized_keys(
+    pamh: &PamHandle,
+    auth_key_file: &str,
+) -> Result<Vec<auth_keys::AuthorizedKey>, ErrType> {
     if auth_key_file.is_empty() {
         let user = get_username_from_pam(pamh)?;
         info!("Reading authorized_keys of user `{}`", user);
@@ -53,7 +54,11 @@ fn read_authorized_keys(pamh: &PamHandle, auth_key_file: &str) -> Result<Vec<Pub
     }
 }
 
-fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_as_user: &str) -> Result<Vec<PublicKey>, ErrType> {
+fn retrieve_authorized_keys_from_cmd(
+    pamh: &PamHandle,
+    auth_key_cmd: &str,
+    run_as_user: &str,
+) -> Result<Vec<auth_keys::AuthorizedKey>, ErrType> {
     let auth_user = get_username_from_pam(pamh)?;
     debug!("Run command `{}` as user `{}`", auth_key_cmd, run_as_user);
     let content = auth_keys::run_authorized_keys_cmd(&auth_key_cmd,
@@ -65,10 +70,12 @@ fn retrieve_authorized_keys_from_cmd(pamh: &PamHandle, auth_key_cmd: &str, run_a
 fn authenticate_via_agent(
     agent: &mut ssh_agent_auth::AgentClient,
     pubkey: &PublicKey,
+    require_user_presence: bool,
 ) -> Result<(), ErrType> {
     let challenge = sign_verify::gen_challenge()?;
     let sig = agent.sign_data(&challenge, pubkey)?;
-    let verified = sign_verify::verify_signature(&challenge, pubkey, &sig)?;
+    let verified =
+        sign_verify::verify_signature(&challenge, pubkey, &sig, require_user_presence)?;
     if verified {
         Ok(())
     } else {
@@ -220,15 +227,24 @@ impl PamHooks for PamRssh {
         let result = agent.list_identities().map(|client_keys| {
             debug!("SSH-Agent reports {} keys", client_keys.len());
             for (i, key) in client_keys.iter().enumerate() {
-                if !is_key_authorized(&key, &authorized_keys) {
-                    debug!("Key[{}] {} is not authorized", i, key.key_type());
-                    continue;
-                }
+                let authorized = match is_key_authorized(&key, &authorized_keys) {
+                    Some(entry) => entry,
+                    None => {
+                        debug!("Key[{}] {} is not authorized", i, key.key_type());
+                        continue;
+                    }
+                };
                 debug!("Key[{}] is authorized", i);
+                if authorized.no_touch_required {
+                    info!(
+                        "Key[{}] has no-touch-required set: user presence is not enforced",
+                        i
+                    );
+                }
                 if let Err(_) = send_prompt() {
                     warn!("{}", RsshErr::SendPromptErr);
                 }
-                match authenticate_via_agent(&mut agent, &key) {
+                match authenticate_via_agent(&mut agent, &key, authorized.requires_user_presence()) {
                     Ok(_) => {
                         info!("Successful authentication");
                         return true;
@@ -306,7 +322,7 @@ mod tests {
             debug!("sig_ret={:?}", sig_ret);
             assert!(sig_ret.is_ok());
             let sig = sig_ret.unwrap();
-            let verify_ret = super::sign_verify::verify_signature(&data, &item, &sig);
+            let verify_ret = super::sign_verify::verify_signature(&data, &item, &sig, true);
             debug!("verify_ret={:?}", verify_ret);
             assert!(verify_ret.is_ok());
             assert!(verify_ret.unwrap());
@@ -324,10 +340,34 @@ mod tests {
         assert!(keys.len() > 0);
         for _ in 0..1000 {
             for item in &keys {
-                let auth_ret = super::authenticate_via_agent(&mut agent, &item);
+                let auth_ret = super::authenticate_via_agent(&mut agent, &item, true);
                 assert!(auth_ret.is_ok());
             }
         }
+    }
+
+    #[test]
+    fn authorized_keys_option_matching() {
+        let content = concat!(
+            "no-touch-required sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBRogHNAvK4P9f8EKulnxrF8SfKIdqNrIleHdj0wvAU5AAAADXNzaDpUb3VjaE9ubHk=\n",
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV\n",
+        );
+        let entries =
+            super::auth_keys::parse_content_of_authorized_keys(&content.to_string()).unwrap();
+        assert_eq!(entries.len(), 2);
+
+        // The listed key carries the option, so the presence bit is optional.
+        let found = super::is_key_authorized(&entries[0].pubkey, &entries).unwrap();
+        assert!(found.no_touch_required);
+        assert!(!found.requires_user_presence());
+        let found = super::is_key_authorized(&entries[1].pubkey, &entries).unwrap();
+        assert!(!found.no_touch_required);
+        assert!(found.requires_user_presence());
+
+        // A key that is not listed is rejected.
+        let other = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUX\n";
+        let other = super::auth_keys::parse_content_of_authorized_keys(&other.to_string()).unwrap();
+        assert!(super::is_key_authorized(&other[0].pubkey, &entries).is_none());
     }
 
     #[test]

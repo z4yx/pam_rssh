@@ -137,6 +137,7 @@ fn preprocess_content_and_sig(
     msg: &[u8],
     ssh_sig: &[u8],
     pubkey: &PublicKey,
+    require_user_presence: bool,
 ) -> Result<(Vec<u8>, Vec<u8>), ErrType> {
     use byteorder::{BigEndian, WriteBytesExt};
     use openssl::sha::sha256;
@@ -150,8 +151,10 @@ fn preprocess_content_and_sig(
                 _ => panic!()
             };
             // Bit 0 of the flags byte is the U2F "user presence" bit. Without
-            // it the key signed without a touch, so refuse the signature.
-            if sig.flags & 0x01 == 0 {
+            // it the key signed without a touch, so refuse the signature
+            // unless the matching authorized_keys entry carries the
+            // `no-touch-required` option.
+            if require_user_presence && sig.flags & 0x01 == 0 {
                 error!("user presence missing in security-key signature");
                 return Err(RsshErr::InvalidSigErr.into_ptr());
             }
@@ -174,10 +177,12 @@ pub fn verify_signature(
     raw_content: &[u8],
     pubkey: &PublicKey,
     ssh_signature: &[u8],
+    require_user_presence: bool,
 ) -> Result<bool, ErrType> {
     use openssl::sign::Verifier;
 
-    let (content, signature) = preprocess_content_and_sig(raw_content, ssh_signature, pubkey)?;
+    let (content, signature) =
+        preprocess_content_and_sig(raw_content, ssh_signature, pubkey, require_user_presence)?;
     let (pkey, digest) = pubkey.to_pkey()?;
     let mut verifier = digest.map_or(Verifier::new_without_digest(&pkey), |d| {
         Verifier::new(d, &pkey)
@@ -247,11 +252,11 @@ fn rejects_missing_user_presence() {
     };
 
     // User presence bit clear: rejected, even with the verified bit set.
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key).is_err());
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key, true).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key, true).is_err());
     // User presence bit set: accepted.
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key).is_ok());
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key, true).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key, true).is_ok());
 
     // A non-security-key signature has no flags byte and is unchanged.
     let plain_key = PublicKey::Ed25519(Ed25519PublicKey { enc_a: vec![0; 32] });
@@ -260,9 +265,59 @@ fn rejects_missing_user_presence() {
         blob: vec![0; 64],
     })
     .unwrap();
-    let (msg, sig) = preprocess_content_and_sig(b"msg", &plain_sig, &plain_key).unwrap();
+    let (msg, sig) = preprocess_content_and_sig(b"msg", &plain_sig, &plain_key, true).unwrap();
     assert_eq!(msg, b"msg".to_vec());
     assert_eq!(sig, vec![0; 64]);
+}
+
+#[test]
+fn accepts_touchless_signature_when_not_required() {
+    use ssh_agent::proto::public_key::{SkEcDsaPublicKey, SkEd25519PublicKey};
+    use ssh_agent::proto::signature::EcDsaSignatureData;
+    use ssh_agent::proto::to_bytes;
+
+    let ed_key = PublicKey::SkEd25519(SkEd25519PublicKey {
+        enc_a: vec![0; 32],
+        application: "ssh:".to_string(),
+    });
+    let ed_sig = |flags: u8| {
+        to_bytes(&proto::SkSignature {
+            algorithm: "sk-ssh-ed25519@openssh.com".to_string(),
+            blob: vec![0; 64],
+            flags,
+            counter: 7,
+        })
+        .unwrap()
+    };
+    let ecdsa_key = PublicKey::SkEcDsa(SkEcDsaPublicKey {
+        identifier: "nistp256".to_string(),
+        q: vec![0; 65],
+        application: "ssh:".to_string(),
+    });
+    let ecdsa_blob = to_bytes(&EcDsaSignatureData {
+        r: vec![1; 32],
+        s: vec![1; 32],
+    })
+    .unwrap();
+    let ecdsa_sig = |flags: u8| {
+        to_bytes(&proto::SkSignature {
+            algorithm: "sk-ecdsa-sha2-nistp256@openssh.com".to_string(),
+            blob: ecdsa_blob.clone(),
+            flags,
+            counter: 7,
+        })
+        .unwrap()
+    };
+
+    // `no-touch-required` on the authorized_keys entry: the presence bit is
+    // no longer enforced, and the flags byte still reaches the U2F message.
+    for flags in [0x00u8, 0x01, 0x04, 0x05] {
+        let (msg, _) = preprocess_content_and_sig(b"msg", &ed_sig(flags), &ed_key, false).unwrap();
+        assert_eq!(msg[32], flags);
+        let (msg, _) =
+            preprocess_content_and_sig(b"msg", &ecdsa_sig(flags), &ecdsa_key, false).unwrap();
+        assert_eq!(msg[32], flags);
+    }
 }
 
 #[test]
@@ -294,9 +349,9 @@ fn rejects_missing_user_presence_ecdsa() {
     };
 
     // User presence bit clear: rejected, even with the verified bit set.
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key).is_err());
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x00), &sk_key, true).is_err());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x04), &sk_key, true).is_err());
     // User presence bit set: accepted.
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key).is_ok());
-    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x01), &sk_key, true).is_ok());
+    assert!(preprocess_content_and_sig(b"msg", &sk_sig(0x05), &sk_key, true).is_ok());
 }
