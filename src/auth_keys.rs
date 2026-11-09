@@ -17,6 +17,27 @@ use super::error::RsshErr;
 
 type ErrType = Box<dyn std::error::Error>;
 
+/// One entry of an `authorized_keys` file: the public key together with the
+/// options that precede it on the same line.
+#[derive(Debug, Clone)]
+pub struct AuthorizedKey {
+    pub pubkey: PublicKey,
+    /// The entry carries the OpenSSH `no-touch-required` option, meaning a
+    /// security-key (FIDO2/U2F) signature may be accepted even when its
+    /// user-presence bit is clear, i.e. the key was created with
+    /// `ssh-keygen -O no-touch-required` and signed without a touch.
+    pub no_touch_required: bool,
+}
+
+impl AuthorizedKey {
+    /// Whether the signature of this key must carry the FIDO user-presence
+    /// bit. This mirrors sshd, which requires it unless the matching
+    /// `authorized_keys` entry says `no-touch-required`.
+    pub fn requires_user_presence(&self) -> bool {
+        !self.no_touch_required
+    }
+}
+
 fn parse_pubkey_fields(line: &str) -> Result<PublicKey, ErrType> {
     let mut fields = line.split_whitespace();
     if let Some(algo) = fields.next() {
@@ -34,12 +55,13 @@ fn parse_pubkey_fields(line: &str) -> Result<PublicKey, ErrType> {
 }
 
 // Based on sshkey_advance_past_options() in https://github.com/openssh/openssh-portable/blob/master/authfile.c
-fn skip_options(line: &str) -> Result<String, ErrType> {
-    let mut it = line.chars();
+// Returns the options part of the line and the rest that starts with the key.
+fn split_options(line: &str) -> Result<(&str, &str), ErrType> {
+    let mut it = line.char_indices();
     let mut quote = false;
-    while let Some(ch) = it.next() {
+    while let Some((idx, ch)) = it.next() {
         if (ch == ' ' || ch == '\t') && !quote {
-            break;
+            return Ok((&line[..idx], &line[idx + ch.len_utf8()..]));
         }
         if ch == '\\' {
             // skip one character after escape symbol
@@ -51,44 +73,83 @@ fn skip_options(line: &str) -> Result<String, ErrType> {
     if quote {
         Err(RsshErr::ParsePubkeyErr.into_ptr())
     } else {
-        Ok(it.collect::<String>())
+        Ok((line, ""))
     }
 }
 
-pub fn parse_content_of_authorized_keys(content: &String) -> Result<Vec<PublicKey>, ErrType> {
-    let mut lines = content.lines();
-    let mut res: Vec<PublicKey> = vec![];
-    while let Some(line) = lines.next() {
+// Split the comma separated options of an authorized_keys entry, honoring
+// quotes and backslash escapes the same way sshd's opt_dequote() does. Values
+// are kept with their `name=value` form; only names are interpreted here.
+fn parse_key_options(options: &str) -> Result<Vec<String>, ErrType> {
+    let mut tokens: Vec<String> = vec![];
+    let mut current = String::new();
+    let mut quote = false;
+    let mut it = options.chars();
+    while let Some(ch) = it.next() {
+        match ch {
+            '\\' => match it.next() {
+                Some(escaped) => current.push(escaped),
+                None => return Err(RsshErr::ParsePubkeyErr.into_ptr()),
+            },
+            '"' => quote = !quote,
+            ',' if !quote => tokens.push(std::mem::take(&mut current)),
+            _ => current.push(ch),
+        }
+    }
+    if quote {
+        return Err(RsshErr::ParsePubkeyErr.into_ptr());
+    }
+    tokens.push(current);
+    Ok(tokens)
+}
+
+fn has_key_option(options: &[String], name: &str) -> bool {
+    options.iter().any(|option| option.trim() == name)
+}
+
+fn parse_line(line: &str) -> Result<AuthorizedKey, ErrType> {
+    let (options, rest) = split_options(line)?;
+    // A line without options starts with the key type itself.
+    if let Ok(pubkey) = parse_pubkey_fields(line) {
+        return Ok(AuthorizedKey {
+            pubkey,
+            no_touch_required: false,
+        });
+    }
+    if rest.trim_start().is_empty() {
+        // Options without a key, or a malformed line: skip it.
+        return Err(RsshErr::ParsePubkeyErr.into_ptr());
+    }
+    let pubkey = parse_pubkey_fields(rest.trim_start())?;
+    let options = parse_key_options(options)?;
+    Ok(AuthorizedKey {
+        pubkey,
+        no_touch_required: has_key_option(&options, "no-touch-required"),
+    })
+}
+
+pub fn parse_content_of_authorized_keys(content: &String) -> Result<Vec<AuthorizedKey>, ErrType> {
+    let mut res: Vec<AuthorizedKey> = vec![];
+    for line in content.lines() {
         let trimed = line.trim_start();
         if trimed.is_empty() || trimed.starts_with("#") {
             continue;
         }
-        if let Ok(pubkey) = parse_pubkey_fields(trimed) {
-            res.push(pubkey);
-            continue;
-        }
-        // If there are options before public key, skip them
-        let skipped = skip_options(trimed);
-        if let Err(e) = skipped {
-            debug!("skip_options() returns: {}", e.as_ref());
-            continue;
-        }
-        debug!("pubkey line after options skipped: {:?}", skipped);
-        match skipped.and_then(|s| parse_pubkey_fields(s.trim_start())) {
-            Ok(pubkey) => res.push(pubkey),
-            Err(e) => debug!("parse_pubkey_fields() returns: {}", e.as_ref())
+        match parse_line(trimed) {
+            Ok(entry) => res.push(entry),
+            Err(e) => debug!("Failed to parse authorized_keys line: {}", e.as_ref()),
         }
     }
     Ok(res)
 }
 
-pub fn parse_authorized_keys(filename: &str) -> Result<Vec<PublicKey>, ErrType> {
+pub fn parse_authorized_keys(filename: &str) -> Result<Vec<AuthorizedKey>, ErrType> {
     let content =
         fs::read_to_string(filename).map_err(|_| RsshErr::FileReadErr(filename.to_string()))?;
     parse_content_of_authorized_keys(&content)
 }
 
-pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<PublicKey>, ErrType> {
+pub fn parse_user_authorized_keys(username: &str) -> Result<Vec<AuthorizedKey>, ErrType> {
     let mut prefix = format!("/home/{}",username);
     // Gets user's $HOME to search for authorized_keys
     let _ = Passwd::from_name(username).map(|opt_passwd| {
@@ -139,20 +200,65 @@ pub fn run_authorized_keys_cmd(auth_key_cmd: &str, auth_user: &str, run_user: &s
 }
 
 #[test]
-fn test_skip_options() {
-    assert_eq!(skip_options("opt key comment").unwrap(), "key comment");
-    assert_eq!(skip_options("a=b,c=d key comment").unwrap(), "key comment");
+fn test_split_options() {
+    let skip = |line: &str| split_options(line).map(|(_, rest)| rest.to_string());
+    assert_eq!(split_options("opt key comment").unwrap(), ("opt", "key comment"));
+    assert_eq!(skip("opt key comment").unwrap(), "key comment");
+    assert_eq!(skip("a=b,c=d key comment").unwrap(), "key comment");
     assert_eq!(
-        skip_options("a=b,x=\"\t\",c=\"d key\"\t key2 comment").unwrap(),
+        skip("a=b,x=\"\t\",c=\"d key\"\t key2 comment").unwrap(),
         " key2 comment"
     );
-    assert_eq!(skip_options("ee").unwrap(), "");
-    assert_eq!(skip_options("").unwrap(), "");
-    assert_eq!(skip_options("a=\"").is_err(), true);
-    assert_eq!(skip_options("a=\" k").is_err(), true);
-    assert_eq!(skip_options("a=\\\"").unwrap(), "");
-    assert_eq!(skip_options("a=\"\\\"\" k").unwrap(), "k");
-    assert_eq!(skip_options("a=\"\\\\\" k").unwrap(), "k");
+    assert_eq!(skip("ee").unwrap(), "");
+    assert_eq!(skip("").unwrap(), "");
+    assert_eq!(skip("a=\"").is_err(), true);
+    assert_eq!(skip("a=\" k").is_err(), true);
+    assert_eq!(skip("a=\\\"").unwrap(), "");
+    assert_eq!(skip("a=\"\\\"\" k").unwrap(), "k");
+    assert_eq!(skip("a=\"\\\\\" k").unwrap(), "k");
+}
+
+#[test]
+fn test_parse_key_options() {
+    assert_eq!(
+        parse_key_options("no-touch-required").unwrap(),
+        vec!["no-touch-required".to_string()]
+    );
+    assert_eq!(
+        parse_key_options("a=b,c=\"d,e\",no-touch-required").unwrap(),
+        vec![
+            "a=b".to_string(),
+            "c=d,e".to_string(),
+            "no-touch-required".to_string()
+        ]
+    );
+    // The option name inside a value must not enable it.
+    assert_eq!(
+        parse_key_options("command=\"no-touch-required\"").unwrap(),
+        vec!["command=no-touch-required".to_string()]
+    );
+    assert!(parse_key_options("a=\"unterminated").is_err());
+    assert!(parse_key_options("a=c\\").is_err());
+}
+
+#[test]
+fn test_no_touch_required_option() {
+    let sk = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBRogHNAvK4P9f8EKulnxrF8SfKIdqNrIleHdj0wvAU5AAAADXNzaDpUb3VjaE9ubHk=";
+    let plain = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUV";
+    let content = format!(
+        "{sk}\n\
+         no-touch-required {sk}\n\
+         command=\"echo no-touch-required\",no-touch-required {sk}\n\
+         command=\"no-touch-required\" {plain}\n\
+         ,,no-touch-required,, {plain}\n"
+    );
+    let entries = parse_content_of_authorized_keys(&content).unwrap();
+    assert_eq!(entries.len(), 5);
+    let no_touch: Vec<bool> = entries.iter().map(|e| e.no_touch_required).collect();
+    assert_eq!(no_touch, vec![false, true, true, false, true]);
+    // Only the entries without the option require the presence bit.
+    assert!(entries[0].requires_user_presence());
+    assert!(!entries[1].requires_user_presence());
 }
 
 #[test]

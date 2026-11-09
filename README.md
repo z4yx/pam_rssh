@@ -141,6 +141,33 @@ Arguments should be appended to the PAM rule. For example:
 auth sufficient libpam_rssh.so debug authorized_keys_command=/usr/bin/sss_ssh_authorizedkeys authorized_keys_command_user=nobody cue [cue_prompt=The prompt message here]
 ```
 
+## Authorized Keys File Options
+
+The key file (`auth_key_file` or the output of `authorized_keys_command`) uses
+the OpenSSH `authorized_keys` format, so options may precede the key on the
+same line. Unknown options are ignored as before; the following one changes
+how a signature is verified:
+
+- `no-touch-required` Accept a security-key signature whose FIDO user-presence
+  bit is clear, i.e. a key created with `ssh-keygen -O no-touch-required` and
+  signed without a touch. Applies to `sk-ssh-ed25519@openssh.com` and
+  `sk-ecdsa-sha2-nistp256@openssh.com` keys; other key types are unaffected.
+
+  Without this option (the default, which matches OpenSSH's sshd) such a
+  signature is rejected and an error mentioning the missing user presence is
+  logged. This keeps the touch as the human-presence step of the authentication.
+
+```
+no-touch-required sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBRogHNAvK4P9f8EKulnxrF8SfKIdqNrIleHdj0wvAU5AAAADXNzaDpUb3VjaE9ubHk= user@host
+```
+
+Only use this for keys that were intentionally created without touch
+protection. Once the option is set, pam_rssh logs at info level that user
+presence is not enforced for that key. If the same key appears on several
+lines, the first matching line decides. As with sshd, whoever can write the
+key file decides this option, so keep the file only writable by root (see
+the Security Notice above).
+
 ## Use Variables in Arguments
 
 Certain variables can be used in arguments. Supported formats are `$var`, `${var}` and `${var:default value}`. For example:
