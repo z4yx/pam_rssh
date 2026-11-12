@@ -242,7 +242,7 @@ impl PamHooks for PamRssh {
                 };
                 debug!("Key[{}] is authorized", i);
                 if authorized.no_touch_required {
-                    info!(
+                    debug!(
                         "Key[{}] has no-touch-required set: user presence is not enforced",
                         i
                     );
