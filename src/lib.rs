@@ -76,9 +76,15 @@ fn authenticate_via_agent(
     }
 }
 
+// libsyslog has no LOG_AUTH on macOS.
+#[cfg(not(target_os = "macos"))]
+const SYSLOG_FACILITY: Facility = Facility::Auth;
+#[cfg(target_os = "macos")]
+const SYSLOG_FACILITY: Facility = Facility::User;
+
 fn setup_syslog() -> Result<(), ErrType> {
     libsyslog::Syslog::builder()
-        .facility(Facility::Auth)
+        .facility(SYSLOG_FACILITY)
         .level(log::LevelFilter::Debug)
         .logopt(Logopt::Pid)
        // .ident("pam_rssh")?
