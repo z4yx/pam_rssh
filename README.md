@@ -163,11 +163,12 @@ no-touch-required sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2g
 ```
 
 Only use this for keys that were intentionally created without touch
-protection. Once the option is set, pam_rssh logs at info level that user
+protection. Once the option is set, pam_rssh logs at debug level that user
 presence is not enforced for that key. If the same key appears on several
 lines, the first matching line decides. As with sshd, whoever can write the
 key file decides this option, so keep the file only writable by root (see
 the Security Notice above).
+
 ## Request Details for the Agent
 
 By default the ssh-agent is asked to sign random bytes, so it can't tell what it is approving. With `challenge=pam_ssh_agent_auth`, it is asked to sign the details of the request instead, in the format used by [pam_ssh_agent_auth](https://github.com/jbeverly/pam_ssh_agent_auth):
