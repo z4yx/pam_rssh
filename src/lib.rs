@@ -7,6 +7,7 @@ mod logger;
 mod sign_verify;
 mod ssh_agent_auth;
 mod pam_items;
+mod request;
 
 use log::*;
 use pam::constants::{PamFlag, PamResultCode, PAM_TEXT_INFO};
@@ -19,6 +20,7 @@ use libsyslog::{Facility, Logopt};
 use std::ffi::CStr;
 use std::str::FromStr;
 use pam::conv::Conv;
+use subst::VariableMap;
 use self::error::RsshErr;
 use self::logger::ConsoleLogger;
 
@@ -67,15 +69,26 @@ fn retrieve_authorized_keys_from_cmd(
     auth_keys::parse_content_of_authorized_keys(&content)
 }
 
+/// What the agent is asked to sign.
+enum Challenge {
+    /// Random bytes.
+    Random,
+    /// The authentication request in pam_ssh_agent_auth's format, with its session id.
+    PamSshAgentAuth(request::Request, Vec<u8>),
+}
+
 fn authenticate_via_agent(
     agent: &mut ssh_agent_auth::AgentClient,
     pubkey: &PublicKey,
+    challenge: &Challenge,
     require_user_presence: bool,
 ) -> Result<(), ErrType> {
-    let challenge = sign_verify::gen_challenge()?;
-    let sig = agent.sign_data(&challenge, pubkey)?;
-    let verified =
-        sign_verify::verify_signature(&challenge, pubkey, &sig, require_user_presence)?;
+    let data = match challenge {
+        Challenge::Random => sign_verify::gen_challenge()?,
+        Challenge::PamSshAgentAuth(req, session_id) => req.signed_data(session_id, pubkey)?,
+    };
+    let sig = agent.sign_data(&data, pubkey)?;
+    let verified = sign_verify::verify_signature(&data, pubkey, &sig, require_user_presence)?;
     if verified {
         Ok(())
     } else {
@@ -136,6 +149,7 @@ impl PamHooks for PamRssh {
         let mut authorized_keys_command = String::new();
         let mut authorized_keys_command_user = String::new();
         let mut cue = false;
+        let mut request_challenge = false;
         let mut cue_prompt = "Please touch the device.".to_string();
         for carg in args {
             let kv: Vec<&str> = carg.to_str().unwrap_or("").splitn(2, '=').collect();
@@ -173,6 +187,14 @@ impl PamHooks for PamRssh {
                     "cue_prompt" => {
                         non_empty_option_check(&kv)?;
                         cue_prompt = substitute_variables(&kv, &pam_vars)?;
+                    }
+                    "challenge" => {
+                        non_empty_option_check(&kv)?;
+                        request_challenge = match kv[1] {
+                            "random" => false,
+                            "pam_ssh_agent_auth" => true,
+                            _ => return Err(RsshErr::ChallengeErr(kv[1].to_string()).into_ptr()),
+                        };
                     }
                     _ => {
                         return Err(RsshErr::OptNameErr(kv[0].to_string()).into_ptr());
@@ -216,6 +238,25 @@ impl PamHooks for PamRssh {
             }
         };
         
+        let challenge = if request_challenge {
+            // One request for every key tried, as pam_ssh_agent_auth does.
+            let built = || -> Result<Challenge, ErrType> {
+                let user = get_username_from_pam(pamh)?;
+                let req = request::Request::collect(user, pam_vars.get("ruser"), pam_vars.get("service"))?;
+                let session_id = req.session_id(&sign_verify::gen_challenge()?)?;
+                Ok(Challenge::PamSshAgentAuth(req, session_id))
+            };
+            match built() {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Cannot build the authentication request: {}", e);
+                    return PamResultCode::PAM_AUTH_ERR;
+                }
+            }
+        } else {
+            Challenge::Random
+        };
+
         // Cue at most once per authentication: the loop below tries every
         // authorized key, and absent-token keys would each prompt otherwise.
         let cue_sent = std::cell::Cell::new(false);
@@ -250,7 +291,7 @@ impl PamHooks for PamRssh {
                 if let Err(_) = send_prompt() {
                     warn!("{}", RsshErr::SendPromptErr);
                 }
-                match authenticate_via_agent(&mut agent, &key, authorized.requires_user_presence()) {
+                match authenticate_via_agent(&mut agent, &key, &challenge, authorized.requires_user_presence()) {
                     Ok(_) => {
                         info!("Successful authentication");
                         return true;
@@ -346,7 +387,7 @@ mod tests {
         assert!(keys.len() > 0);
         for _ in 0..1000 {
             for item in &keys {
-                let auth_ret = super::authenticate_via_agent(&mut agent, &item, true);
+                let auth_ret = super::authenticate_via_agent(&mut agent, &item, &super::Challenge::Random, true);
                 assert!(auth_ret.is_ok());
             }
         }
@@ -374,6 +415,22 @@ mod tests {
         let other = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILNwZPJqdxsO6ahniFpVqNbT9ACXHSDpF5XLkrRU9dUX\n";
         let other = super::auth_keys::parse_content_of_authorized_keys(&other.to_string()).unwrap();
         assert!(super::is_key_authorized(&other[0].pubkey, &entries).is_none());
+    }
+
+    #[test]
+    fn sshagent_request_auth() {
+        init_log();
+        let sock = std::env::var("SSH_AUTH_SOCK").unwrap();
+        let mut agent = AgentClient::new(&sock);
+        let keys = agent.list_identities().unwrap();
+        assert!(keys.len() > 0);
+        let req = super::request::Request::collect("root", None, Some("sudo".to_string())).unwrap();
+        let session_id = req.session_id(&super::sign_verify::gen_challenge().unwrap()).unwrap();
+        let challenge = super::Challenge::PamSshAgentAuth(req, session_id);
+        for item in &keys {
+            let auth_ret = super::authenticate_via_agent(&mut agent, &item, &challenge, true);
+            assert!(auth_ret.is_ok());
+        }
     }
 
     #[test]
