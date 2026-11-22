@@ -90,7 +90,7 @@ sudo dnf install rpm-build cargo rustc openssl-devel pam-devel pkgconfig \
 
 The resulting `.rpm` files are written to `./rpm-artifacts/`. The module is
 installed to `/usr/lib64/security/libpam_rssh.so`. CI builds for Fedora
-(42/43/44) are handled by `.github/workflows/rpm-release.yml`.
+(42/43/44/45) are handled by `.github/workflows/rpm-release.yml`.
 
 
 ## Config

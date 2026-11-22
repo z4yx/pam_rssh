@@ -26,6 +26,16 @@ jobs:
           # Fedora
           - distro: fedora
             image: fedora
+            version: 45
+            arch: amd64
+            runner: ubuntu-24.04
+          - distro: fedora
+            image: fedora
+            version: 45
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - distro: fedora
+            image: fedora
             version: 44
             arch: amd64
             runner: ubuntu-24.04
@@ -135,7 +145,7 @@ jobs:
           files: downloaded/**/*.rpm
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
-          body: Automated .rpm builds for Fedora (42/43/44) and RHEL-compatible Rocky Linux (9/10)
+          body: Automated .rpm builds for Fedora (42/43/44/45) and RHEL-compatible Rocky Linux (9/10)
           draft: false
           prerelease: false
         env:
