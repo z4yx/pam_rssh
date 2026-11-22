@@ -185,7 +185,7 @@ An agent which confirms each signature, such as one forwarded from a phone or an
 auth sufficient libpam_rssh.so auth_key_file=/etc/authorized_keys/${user}.keys challenge=pam_ssh_agent_auth
 ```
 
-The command line is read from `/proc/self/cmdline`, so it is only sent on Linux, and requests longer than 64 KiB are refused rather than cut short. Unlike pam_ssh_agent_auth, empty arguments are kept, so the command the agent sees is the command being run.
+The command line is taken from the process's own arguments and the host name from `gethostname()`, so the request is filled in wherever the module builds, including macOS (which has no `/proc`). Requests longer than 64 KiB are refused rather than cut short. Unlike pam_ssh_agent_auth, empty arguments are kept, so the command the agent sees is the command being run.
 
 ## Use Variables in Arguments
 

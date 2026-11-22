@@ -300,6 +300,7 @@ version = "1.2.2"
 dependencies = [
  "base64",
  "byteorder",
+ "libc",
  "libsyslog",
  "log",
  "multisock",

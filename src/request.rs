@@ -71,10 +71,10 @@ impl Request {
             Some(r) => r,
             None => Passwd::current_user().ok_or(RsshErr::GetUidErr)?.name,
         };
-        let argv = match std::fs::read("/proc/self/cmdline") {
-            Ok(raw) => Some(split_cmdline(&raw)?),
-            Err(e) => {
-                warn!("Cannot read the command line: {}", e);
+        let argv = match current_argv() {
+            Some(argv) => Some(argv),
+            None => {
+                warn!("Cannot determine the command line of the current process");
                 None
             }
         };
@@ -86,9 +86,7 @@ impl Request {
                 .map(|p| p.as_os_str().as_bytes().to_vec())
                 .unwrap_or_default(),
             argv,
-            hostname: std::fs::read_to_string("/proc/sys/kernel/hostname")
-                .map(|h| h.trim_end().to_string())
-                .unwrap_or_default(),
+            hostname: system_hostname(),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -106,6 +104,9 @@ impl Request {
             for arg in argv {
                 put_string(&mut action, arg)?;
             }
+        }
+        if action.len() > MAX_ACTION_LEN {
+            return Err(RsshErr::CmdlineTooLongErr(action.len()).into_ptr());
         }
         let mut buf = vec![];
         buf.write_u32::<BigEndian>(PAM_SSH_AGENT_AUTH_REQUESTV1)?;
@@ -141,16 +142,35 @@ fn put_string(buf: &mut Vec<u8>, s: &[u8]) -> Result<(), ErrType> {
     Ok(())
 }
 
-/// Splits the contents of /proc/<pid>/cmdline into its arguments.
-fn split_cmdline(raw: &[u8]) -> Result<Vec<Vec<u8>>, ErrType> {
-    if raw.len() > MAX_ACTION_LEN {
-        return Err(RsshErr::CmdlineTooLongErr(raw.len()).into_ptr());
+/// The command line of the current process.
+///
+/// This is the same data as `/proc/self/cmdline` on Linux, but it also works where there is
+/// no `/proc`, such as macOS. Empty arguments are kept, as they were when the file was read.
+fn current_argv() -> Option<Vec<Vec<u8>>> {
+    let argv: Vec<Vec<u8>> = std::env::args_os()
+        .map(|arg| arg.as_os_str().as_bytes().to_vec())
+        .collect();
+    if argv.is_empty() {
+        None
+    } else {
+        Some(argv)
     }
-    let raw = raw.strip_suffix(&[0]).unwrap_or(raw);
-    if raw.is_empty() {
-        return Ok(vec![]);
+}
+
+/// The host name of the machine, the same value the `hostname` command reports.
+///
+/// `gethostname()` is used instead of `/proc/sys/kernel/hostname`, which does not exist on
+/// macOS.
+fn system_hostname() -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: gethostname() writes at most buf.len() bytes into buf and keeps no pointer.
+    let ret = unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) };
+    if ret != 0 {
+        warn!("gethostname() failed");
+        return String::new();
     }
-    Ok(raw.split(|c| *c == 0).map(|a| a.to_vec()).collect())
+    let end = buf.iter().position(|byte| *byte == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).to_string()
 }
 
 #[cfg(test)]
@@ -184,10 +204,41 @@ mod tests {
     }
 
     #[test]
-    fn test_split_cmdline() {
-        assert_eq!(split_cmdline(b"sudo\0ls\0\0-l\0").unwrap(), vec![b"sudo".to_vec(), b"ls".to_vec(), b"".to_vec(), b"-l".to_vec()]);
-        assert_eq!(split_cmdline(b"").unwrap(), Vec::<Vec<u8>>::new());
-        assert!(split_cmdline(&vec![b'a'; MAX_ACTION_LEN + 1]).is_err());
+    fn test_current_argv() {
+        let argv = current_argv().unwrap();
+        assert!(!argv.is_empty());
+        assert_eq!(argv.len(), std::env::args_os().count());
+    }
+
+    // On Linux the argv we send must be exactly what /proc/self/cmdline held, so switching
+    // from the file to std::env::args_os() does not change the request.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_current_argv_matches_proc_cmdline() {
+        let raw = std::fs::read("/proc/self/cmdline").unwrap();
+        let mut expected: Vec<Vec<u8>> = raw.split(|byte| *byte == 0).map(|arg| arg.to_vec()).collect();
+        if expected.last().map(|arg| arg.is_empty()).unwrap_or(false) {
+            expected.pop();
+        }
+        assert_eq!(current_argv().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_system_hostname() {
+        assert!(!system_hostname().is_empty());
+    }
+
+    #[test]
+    fn test_action_too_long() {
+        let req = Request {
+            argv: Some(vec![vec![b'a'; MAX_ACTION_LEN]]),
+            ..sample()
+        };
+        let err = req.session_id(b"cookie").unwrap_err();
+        assert!(matches!(
+            err.downcast::<RsshErr>().unwrap().as_ref(),
+            RsshErr::CmdlineTooLongErr(_)
+        ));
     }
 
     #[test]

@@ -20,3 +20,5 @@ log = { version = "^0.4", features = ["std", "serde"] }
 subst = "^0.3.0"
 libsyslog = "^0.1.1"
 pwd = "1"
+# gethostname() on every unix, since macOS has no /proc.
+libc = "0.2"
