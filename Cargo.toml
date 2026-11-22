@@ -1,6 +1,6 @@
 [package]
 name = "pam_rssh"
-version = "1.2.2"
+version = "1.2.3"
 authors = ["Yuxiang Zhang"]
 edition = "2018"
 

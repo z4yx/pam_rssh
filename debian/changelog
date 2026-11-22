@@ -1,3 +1,24 @@
+pam-rssh (1.2.3-1) unstable; urgency=medium
+
+  * Reject security-key signatures whose FIDO user-presence flag is clear
+    (sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com), matching
+    sshd. Keys created with -O no-touch-required now fail unless their
+    authorized_keys entry allows them. (#38, #39)
+  * Add the no-touch-required option to authorized_keys entries and to the
+    output of authorized_keys_command. (#38, #39)
+  * Add the challenge=<random|pam_ssh_agent_auth> module option. With
+    challenge=pam_ssh_agent_auth the ssh-agent signs the request details
+    (users, PAM service, command line, working directory, host name, time and
+    a random cookie) in pam_ssh_agent_auth's format, so an agent that confirms
+    signatures can show which command is being approved. (#40)
+  * Read the command line from the process arguments and the host name with
+    gethostname(), so the request also works on macOS, which has no /proc.
+  * Log to LOG_USER on macOS, where libsyslog has no LOG_AUTH. (#41)
+  * Build RPMs for Fedora 45 (x86_64 and aarch64). (#42)
+  * Document the authorized_keys options and the challenge option.
+
+ -- Yuxiang Zhang <z4yx@users.noreply.github.com>  Sun, 22 Nov 2026 00:00:00 +0000
+
 pam-rssh (1.2.2-1) unstable; urgency=medium
 
   * Replace syslog crate with libsyslog (native system syslog)
